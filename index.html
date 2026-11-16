@@ -1,0 +1,2222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Serving open-weight models yourself with vLLM and SGLang, from the HTTP request down to the memory page, ending with a working server on a DGX Spark. 25 pages.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Paged">
+<meta property="og:title" content="Paged">
+<meta property="og:description" content="Serving open-weight models yourself with vLLM and SGLang, from the HTTP request down to the memory page, ending with a working server on a DGX Spark. 25 pages.">
+<meta property="og:url" content="https://ironman1421.github.io/paged-deck/">
+<meta property="og:image" content="https://ironman1421.github.io/paged-deck/img/preview.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Title slide: Paged, over a live simulation of KV-cache pages">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Paged">
+<meta name="twitter:description" content="Serving open-weight models yourself with vLLM and SGLang, from the HTTP request down to the memory page, ending with a working server on a DGX Spark. 25 pages.">
+<meta name="twitter:image" content="https://ironman1421.github.io/paged-deck/img/preview.jpg">
+<link rel="apple-touch-icon" href="img/preview-square.jpg">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Paged</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,200..800&family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=Courier+Prime:wght@400;700&display=swap">
+<style>
+:root{
+  --paper:#1C1424; --paper2:#2A1F35; --paper3:#3A2D48;
+  --ink:#F1E9F7; --ink2:#D3C6E0; --muted:#B0A0C0;
+  --blue:#3FE0C5; --pink:#FF4FA3; --yellow:#D4F53C; --purple:#A58BFF; --green:#7CF29A; --orange:#FFB3E0; --red:#FF6B8B;
+  --display:"Bricolage Grotesque","Avenir Next Condensed","Arial Narrow",system-ui,sans-serif;
+  --serif:"Newsreader","Iowan Old Style","Palatino Linotype",Georgia,serif;
+  --mono:"Courier Prime",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --tabw:46px;
+  --padx:clamp(18px,4.2vw,84px);
+  --padt:clamp(44px,7.4vh,92px);
+  --padb:clamp(64px,9.4vh,108px);
+  --fs:clamp(15.5px,1.06vw + 2px,23px);
+  --rule:color-mix(in srgb,var(--ink) 24%,transparent);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#1C1424;color:var(--ink);overflow:hidden;overscroll-behavior:none}
+body{font-family:var(--serif);font-size:var(--fs);line-height:1.42;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;-webkit-text-size-adjust:100%}
+canvas#gpu,canvas#cpu,canvas#ink{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;display:block;z-index:0;pointer-events:none}
+canvas#cpu{display:none}
+/* first frame: a still proof of the plate, printed in CSS, shown until the live press takes over */
+#proof{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.62;transition:opacity .7s ease;
+  background:
+   repeating-linear-gradient(180deg,transparent 0 15px,#1C1424 15px 19px),
+   radial-gradient(circle at 50% 50%,#1C1424 0 34%,transparent 36%) 0 0/7px 7px,
+   linear-gradient(180deg,#A58BFF 0 13%,transparent 13%),
+   repeating-linear-gradient(90deg,#FF4FA3 0 46px,#3FE0C5 46px 120px,#1C1424 120px 150px,#D4F53C 150px 196px,#FF4FA3 196px 232px,#1C1424 232px 262px,#3FE0C5 262px 331px,#F28BC0 331px 377px) 0 13%/100% 14px,
+   repeating-linear-gradient(90deg,#3FE0C5 0 83px,#1C1424 83px 101px,#FF4FA3 101px 190px,#7CF29A 190px 247px,#1C1424 247px 290px,#FF4FA3 290px 353px) 40px 13%/100% 21px,
+   #1C1424;
+  -webkit-mask-image:linear-gradient(180deg,#000 0 70%,rgba(0,0,0,.25) 86%,transparent);mask-image:linear-gradient(180deg,#000 0 70%,rgba(0,0,0,.25) 86%,transparent)}
+body.live #proof,body:not(.at-cover) #proof{opacity:0}
+#deck{position:fixed;inset:0;z-index:1;touch-action:pan-y}
+.slide{position:absolute;inset:0;padding:var(--padt) calc(var(--tabw) + var(--padx)) var(--padb) max(var(--padx),env(safe-area-inset-left));
+  display:grid;gap:clamp(16px,3vw,64px);align-content:center;visibility:hidden;opacity:0;overflow:hidden}
+.slide.on{visibility:visible;opacity:1}
+.slide.off{transition:opacity .3s ease, visibility 0s .3s}
+.slide.has-plate{grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);align-items:center}
+.pg{display:grid;gap:clamp(16px,3vw,64px);align-content:center;min-width:0}
+.pg.two{grid-template-columns:minmax(0,1.12fr) minmax(0,.88fr);align-items:center}
+.pg.two.even{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.pg.codepg{grid-template-columns:minmax(0,.6fr) minmax(0,1.4fr);align-items:center}
+.tx,.fig{min-width:0}
+.plate{position:relative;min-height:240px;height:min(66vh,700px);width:100%;margin-bottom:3.2em}
+.plate[data-pick]{cursor:crosshair;touch-action:none}
+.cap{position:absolute;left:0;right:0;top:calc(100% + 27px);font-size:.7em;color:var(--ink2);line-height:1.3}
+.cap .live{font-family:var(--mono);font-size:.94em;color:var(--ink);display:block;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cap .key{display:flex;flex-wrap:wrap;gap:.1em 1.1em;font-style:italic;margin-top:.15em}
+.key i{display:inline-block;width:.8em;height:.8em;vertical-align:-.06em;margin-right:.35em;background:var(--c);border-radius:50%}
+.key i.sq{border-radius:0}
+.key i.ring{background:none;border:1.5px solid var(--c)}
+.key i.hatch{border-radius:0;background:repeating-linear-gradient(45deg,var(--ink2) 0 1px,transparent 1px 4px)}
+
+/* type */
+h1,h2,h3{font-family:var(--display);font-weight:760;font-variation-settings:"wdth" 78,"opsz" 96;letter-spacing:-.018em;line-height:.93;margin:0;text-wrap:balance}
+h2{font-size:clamp(2.05rem,4.1vw,5.2rem);margin-bottom:.34em}
+h3{font-size:1.18em;font-variation-settings:"wdth" 84,"opsz" 30;font-weight:700;letter-spacing:-.005em;line-height:1.05;margin:0 0 .3em}
+p{margin:0 0 .72em;text-wrap:pretty;max-width:36em}
+.lede{font-size:1.18em;line-height:1.32;max-width:27em}
+.small{font-size:.84em}
+.muted{color:var(--muted)}
+code,kbd,.m{font-family:var(--mono);font-size:.82em;letter-spacing:-.01em}
+p code,li code,td code,dd code{background:color-mix(in srgb,var(--paper3) 78%,transparent);padding:.04em .28em}
+mark{background:linear-gradient(transparent 88%,color-mix(in srgb,var(--yellow) 80%,transparent) 88% 100%);color:var(--yellow);padding:0 .04em}
+em{font-style:italic}
+a{color:var(--blue);text-decoration-thickness:1px;text-underline-offset:.15em}
+.est{font-style:italic;color:var(--pink);font-size:.8em;white-space:nowrap}
+.est::before{content:"≈ "}
+.src{position:absolute;left:max(var(--padx),env(safe-area-inset-left));right:calc(var(--tabw) + var(--padx) + 30vw);bottom:calc(var(--padb) * .66);font-size:.6em;color:var(--muted);line-height:1.3;font-style:italic;max-width:none;margin:0}
+.src b{font-style:normal;font-weight:600;color:var(--ink2)}
+ol.rule,ul.rule{list-style:none;margin:0;padding:0;counter-reset:r}
+ol.rule>li,ul.rule>li{border-top:1px solid var(--rule);padding:.46em 0 .5em 2.1em;position:relative;counter-increment:r}
+ol.rule>li:last-child,ul.rule>li:last-child{border-bottom:1px solid var(--rule)}
+ol.rule>li::before{content:counter(r);position:absolute;left:0;top:.36em;font-family:var(--display);font-weight:700;font-variation-settings:"wdth" 75;font-size:1.25em;color:var(--blue);line-height:1}
+ul.rule>li::before{content:"";position:absolute;left:.2em;top:.95em;width:.7em;height:2px;background:var(--pink)}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:clamp(14px,2.6vw,48px)}
+.big{font-family:var(--display);font-weight:800;font-variation-settings:"wdth" 75,"opsz" 96;font-size:clamp(2.8rem,6.6vw,8.4rem);line-height:.85;letter-spacing:-.03em}
+.big small{font-size:.3em;font-weight:600;letter-spacing:0;font-variation-settings:"wdth" 90,"opsz" 24;margin-left:.16em}
+.eq{font-family:var(--mono);font-size:.86em;line-height:1.6;border-left:3px solid var(--pink);padding:.2em 0 .2em .9em;margin:.6em 0 .9em}
+.eq b{font-weight:700;color:var(--blue)}
+
+/* tables */
+table.t{border-collapse:collapse;width:100%;font-size:.8em;line-height:1.3}
+table.t th,table.t td{text-align:left;vertical-align:top;padding:.44em .8em .44em 0;border-top:1px solid var(--rule)}
+table.t thead th{font-family:var(--display);font-variation-settings:"wdth" 80,"opsz" 24;font-weight:700;font-size:1.12em;border-top:2px solid var(--ink);padding-top:.5em}
+table.t tbody tr:last-child td,table.t tbody tr:last-child th{border-bottom:2px solid var(--ink)}
+table.t th[scope=row]{font-style:italic;font-weight:500;color:var(--ink2);white-space:nowrap}
+table.t code{font-size:.92em;background:none;padding:0}
+
+/* code */
+.code{position:relative;background:var(--paper2);border-left:3px solid var(--blue);margin:0 0 1em}
+.code pre{margin:0;padding:.85em 1em .9em 1.05em;font-family:var(--mono);font-size:clamp(10.5px,.68vw + 3.6px,17px);line-height:1.46;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink);tab-size:2}
+.code .c{color:var(--muted)}
+.code .k{color:var(--blue);font-weight:700}
+.code .s{color:#FF9CCB}
+.code .label{position:absolute;right:.6em;top:-.95em;font-family:var(--serif);font-style:italic;font-size:.66em;color:var(--ink2);background:var(--paper);padding:0 .4em}
+.copy{position:absolute;right:.45em;bottom:.45em;font:italic .66em var(--serif);color:var(--ink2);background:var(--paper);border:1px solid color-mix(in srgb,var(--ink) 35%,transparent);padding:.25em .7em;cursor:pointer}
+.copy:hover{background:var(--ink);color:var(--paper)}
+.copy.ok{background:var(--green);color:var(--paper);border-color:var(--green)}
+
+/* controls */
+.ctl{display:grid;grid-template-columns:minmax(8.2em,auto) 1fr 3.6em;align-items:center;gap:.1em .8em;margin:.2em 0;font-size:.84em}
+.ctl label{font-family:var(--mono);font-size:.86em;white-space:nowrap}
+.ctl label small{display:block;font-family:var(--serif);font-style:italic;font-size:.82em;color:var(--muted);line-height:1}
+.ctl output{font-family:var(--display);font-variation-settings:"wdth" 80;font-weight:700;text-align:right;font-size:1.08em;font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:34px;background:transparent;margin:0;touch-action:none}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--ink)}
+input[type=range]::-moz-range-track{height:2px;background:var(--ink)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:24px;margin-top:-11px;background:var(--pink);border:2px solid var(--ink);border-radius:0;cursor:ew-resize}
+input[type=range]::-moz-range-thumb{width:12px;height:21px;background:var(--pink);border:2px solid var(--ink);border-radius:0}
+input[type=range]:focus-visible{outline:2px dashed var(--blue);outline-offset:3px}
+.seg{display:inline-flex;flex-wrap:wrap;gap:0;border:1.5px solid var(--ink);margin:.2em 0 .6em}
+.seg button{font:600 .76em var(--display);font-variation-settings:"wdth" 82;background:transparent;color:var(--ink);border:0;border-right:1.5px solid var(--ink);padding:.55em .85em;cursor:pointer;line-height:1.1}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
+.seg button:focus-visible{outline:2px dashed var(--pink);outline-offset:-4px}
+.readout{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.4em 1em;margin:.6em 0 .3em;border-top:2px solid var(--ink);padding-top:.45em}
+.readout.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.readout div{font-size:.68em;color:var(--ink2);font-style:italic;line-height:1.15}
+.readout b{display:block;font:800 2.1em/1 var(--display);font-variation-settings:"wdth" 75,"opsz" 48;color:var(--ink);font-style:normal;letter-spacing:-.02em;margin-bottom:.12em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.readout b small{font-size:.42em;font-weight:600;letter-spacing:0;margin-left:.15em;color:var(--ink2)}
+.readout.hero b{font-size:2.9em;color:var(--yellow)}
+.readout.minor{border-top:1px solid var(--rule);margin-top:.2em}
+.readout.minor b{font-size:1.5em}
+.sim-note{font-size:.66em;font-style:italic;color:var(--muted);max-width:44em}
+canvas.strip{width:100%;display:block}
+
+/* chrome: running head, folio, tabs */
+.runhead{position:fixed;z-index:3;top:max(14px,env(safe-area-inset-top));left:max(var(--padx),env(safe-area-inset-left));right:calc(var(--tabw) + var(--padx));display:flex;justify-content:space-between;font-size:.66em;font-style:italic;color:var(--ink2);pointer-events:none;border-bottom:1px solid color-mix(in srgb,var(--ink) 30%,transparent);padding-bottom:.3em}
+.runhead b{font-family:var(--display);font-style:normal;font-weight:700;font-variation-settings:"wdth" 80;color:var(--ink);margin-right:.5em}
+.folio{position:fixed;z-index:3;left:max(calc(var(--padx) - 10px),env(safe-area-inset-left));bottom:max(10px,env(safe-area-inset-bottom));display:flex;align-items:center;gap:.1em;user-select:none;-webkit-user-select:none}
+.folio button{all:unset;cursor:pointer;font:400 1.9em/1 var(--display);padding:.1em .32em;color:var(--ink)}
+.folio button:hover{color:var(--pink)}
+.folio button:focus-visible{outline:2px dashed var(--blue)}
+.folio button[disabled]{opacity:.28;cursor:default}
+.folio .num{font:800 2.3em/1 var(--display);font-variation-settings:"wdth" 75,"opsz" 96;letter-spacing:-.04em;min-width:1.25em;text-align:center;font-variant-numeric:tabular-nums;display:inline-block}
+.folio .of{font-style:italic;font-size:.7em;color:var(--muted);margin:0 .5em 0 .1em;align-self:flex-end;padding-bottom:.35em}
+.folio .ttl{font-style:italic;font-size:.7em;color:var(--ink2);max-width:28vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;align-self:flex-end;padding-bottom:.35em}
+.tabs{position:fixed;z-index:3;right:0;top:0;bottom:0;width:var(--tabw);display:flex;flex-direction:column;justify-content:center;gap:4px;padding-right:env(safe-area-inset-right)}
+.tabs button{all:unset;box-sizing:border-box;cursor:pointer;writing-mode:vertical-rl;transform:translateX(9px);transition:transform .35s cubic-bezier(.2,.8,.2,1),filter .2s;background:var(--c);color:#1C1424;font:700 .62em/1 var(--display);font-variation-settings:"wdth" 82;padding:.9em .55em;letter-spacing:.01em;white-space:nowrap;min-height:5.2em;display:flex;align-items:center;gap:.5em;filter:saturate(.7) brightness(.82);position:relative}
+.tabs button span.rn{font-family:var(--serif);font-style:italic;font-weight:500}
+.tabs button.cur{transform:translateX(0);filter:none;box-shadow:-3px 0 0 var(--ink)}
+.tabs button:hover{transform:translateX(3px);filter:none}
+.tabs button:focus-visible{outline:2px dashed var(--ink);outline-offset:2px}
+/* the reading position inside the current chapter: a registration tick that slides down the tab */
+.tabs button.cur::after{content:"";position:absolute;left:-9px;width:6px;height:2px;background:var(--ink);top:calc(8% + var(--prog,0) * 84%);transition:top .4s cubic-bezier(.2,.8,.2,1)}
+.stamp{position:fixed;z-index:3;right:calc(var(--tabw) + var(--padx));bottom:max(16px,env(safe-area-inset-bottom));font-style:italic;font-size:.6em;color:var(--pink);border:1.5px solid var(--pink);outline:1px solid var(--pink);outline-offset:2px;padding:.25em .7em;transform:rotate(-2.2deg);background:color-mix(in srgb,var(--paper) 78%,transparent);pointer-events:none;max-width:44vw;text-align:center}
+.stamp.cpu{color:var(--blue);border-color:var(--blue);outline-color:var(--blue)}
+
+/* cover */
+.cover{align-content:end;grid-template-columns:minmax(0,1fr)}
+.cover .slab{background:var(--paper);padding:clamp(18px,2.4vw,42px) clamp(18px,2.8vw,52px) clamp(16px,2vw,36px);max-width:min(860px,100%);position:relative;justify-self:start;box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 18%,transparent)}
+.cover .slab::before,.cover .slab::after{content:"";position:absolute;width:22px;height:22px;border:solid var(--ink);border-width:0}
+.cover .slab::before{left:-12px;top:-12px;border-left-width:1px;border-top-width:1px}
+.cover .slab::after{right:-12px;bottom:-12px;border-right-width:1px;border-bottom-width:1px}
+.title{position:relative;font-family:var(--display);font-weight:800;font-variation-settings:"wdth" 75,"opsz" 96;font-size:clamp(5rem,15vw,15.5rem);line-height:.78;letter-spacing:-.05em;margin:0 0 .12em;color:transparent}
+.title span{position:absolute;left:0;top:0;mix-blend-mode:screen}
+.title .a{color:var(--blue);transform:translate(-.012em,.006em)}
+.title .b{color:var(--pink);transform:translate(.014em,-.008em)}
+.title .ghost{position:static;visibility:hidden}
+@keyframes regA{0%{transform:translate(-.09em,.03em);opacity:.0}60%{opacity:1}100%{transform:translate(-.012em,.006em)}}
+@keyframes regB{0%{transform:translate(.1em,-.04em);opacity:0}60%{opacity:1}100%{transform:translate(.014em,-.008em)}}
+.cover.on .title .a{animation:regA .9s cubic-bezier(.2,.8,.2,1) both}
+.cover.on .title .b{animation:regB .9s cubic-bezier(.2,.8,.2,1) .06s both}
+.cover .sub{font-size:clamp(1.05rem,1.6vw,1.75rem);line-height:1.25;max-width:31em;margin:0 0 .7em}
+.cover .meta{font-size:.74em;font-style:italic;color:var(--ink2);display:flex;gap:.5em 1.4em;flex-wrap:wrap}
+
+/* path stations */
+.path{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:0;margin:.4em 0 1em;border-top:2px solid var(--ink);border-bottom:2px solid var(--ink)}
+.path div{padding:.55em .4em .6em;border-right:1px solid var(--rule);font-size:.66em;line-height:1.2;position:relative;transition:background .25s,color .25s}
+.path div:last-child{border-right:0}
+.path div b{display:block;font:700 1.22em/1 var(--display);font-variation-settings:"wdth" 78;margin-bottom:.25em}
+.path div.lit{background:var(--yellow);color:#1C1424}
+
+/* layers bars */
+.layers{display:flex;gap:2px;height:3.2em;align-items:flex-end;margin:.5em 0 .3em}
+.layers i{flex:1;background:color-mix(in srgb,var(--blue) 35%,transparent);height:55%}
+.layers i.f{background:var(--pink);height:100%}
+.ptab{display:grid;grid-template-columns:auto repeat(8,minmax(0,1fr));font-family:var(--mono);font-size:.7em;border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);margin:.6em 0}
+.ptab span{padding:.35em .3em;border-left:1px solid var(--rule);text-align:center;white-space:nowrap;overflow:hidden}
+.ptab span.h{font-family:var(--serif);font-style:italic;text-align:left;border-left:0;padding-left:0;padding-right:.8em;color:var(--ink2)}
+.ptab .row2{border-top:1px solid var(--rule)}
+.ptab .ph{color:var(--pink);font-weight:700}
+.ptab .sh{color:var(--yellow)}
+
+/* quantiser */
+#quant{width:100%;height:auto;display:block;margin:.3em 0}
+.qbar{display:flex;gap:.3em 1.2em;flex-wrap:wrap;font-size:.74em;margin-top:.2em}
+.qbar b{font-family:var(--display);font-variation-settings:"wdth" 80}
+
+/* memory bar */
+.membar{display:flex;height:2.4em;border:1.5px solid var(--ink);margin:.6em 0 .25em;overflow:hidden}
+.membar div{height:100%;position:relative;transition:flex-basis .5s cubic-bezier(.2,.8,.2,1);min-width:0;overflow:hidden;font-size:.62em;padding:.25em .35em;line-height:1.05;white-space:nowrap}
+.membar .w{background:var(--purple);color:#1C1424}
+.membar .d{background:var(--ink);color:#1C1424}
+.membar .o{background:repeating-linear-gradient(45deg,var(--blue) 0 2px,transparent 2px 6px);color:var(--ink)}
+.membar .kv{background:var(--pink);color:#1C1424}
+.membar .os{background:repeating-linear-gradient(-45deg,color-mix(in srgb,var(--ink) 30%,transparent) 0 1px,transparent 1px 5px);color:var(--ink2)}
+.memscale{display:flex;justify-content:space-between;font-size:.6em;color:var(--muted);font-family:var(--mono)}
+
+.sizes{width:100%;display:block}
+.specrow{display:flex;flex-wrap:wrap;gap:.3em .25em;min-height:4.6em;align-content:flex-start;margin:.4em 0 .4em;font-family:var(--serif);font-size:1.02em}
+.specrow span{padding:.08em .32em;border:1.5px solid transparent;transition:all .25s}
+.specrow .acc{background:var(--ink);color:#1C1424}
+.specrow .draft{border-color:var(--pink);border-style:dashed;color:var(--pink)}
+.specrow .rej{text-decoration:line-through;color:var(--muted);border-color:color-mix(in srgb,var(--muted) 40%,transparent)}
+.specrow .bonus{background:var(--blue);color:#1C1424}
+
+.svgbox{width:100%;height:auto;display:block}
+.svgbox text{font-family:var(--serif)}
+.svgbox .mono{font-family:var(--mono)}
+
+dl.spec{display:grid;grid-template-columns:auto 1fr;margin:0;font-size:.86em}
+dl.spec dt{font-style:italic;color:var(--ink2);padding:.4em 1.2em .4em 0;border-top:1px solid var(--rule)}
+dl.spec dd{margin:0;padding:.4em 0;border-top:1px solid var(--rule);font-weight:500}
+dl.spec dd b{font-family:var(--display);font-variation-settings:"wdth" 80;font-size:1.15em}
+
+.gotchas{columns:2;column-gap:clamp(18px,3vw,56px);font-size:.9em}
+.gotchas li{break-inside:avoid}
+.srcs{columns:2;column-gap:2.4em;font-size:.7em;line-height:1.35;padding-left:1.4em;margin:0}
+.srcs li{break-inside:avoid;margin-bottom:.4em}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.chromebar{display:none}
+
+/* ———— responsive ———— */
+@media (max-width: 1100px){
+  .pg.codepg{grid-template-columns:minmax(0,1fr)}
+  .readout{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .readout.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media (max-width: 760px), (max-height: 520px){
+  :root{--tabw:0px;--padx:16px;--padt:calc(38px + env(safe-area-inset-top));--padb:calc(58px + env(safe-area-inset-bottom));--fs:16px}
+  .slide,.slide.has-plate{display:flex;flex-direction:column;align-items:stretch;gap:0;padding:var(--padt) 0 var(--padb) 0}
+  .pg,.pg.two,.pg.two.even,.pg.codepg{display:block;flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+    padding:14px max(16px,env(safe-area-inset-right)) 28px max(16px,env(safe-area-inset-left));
+    -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 12px,#000 calc(100% - 26px),transparent);mask-image:linear-gradient(180deg,transparent 0,#000 12px,#000 calc(100% - 26px),transparent)}
+  .fig{margin-top:1.2em}
+  .plate{order:-1;flex:0 0 auto;height:30vh;height:30dvh;min-height:150px;margin:6px 16px 4.3em;width:auto}
+  .cap{font-size:.66em;top:calc(100% + 25px)}
+  .cap .key{gap:0 .9em}
+  .chromebar{display:block;position:fixed;z-index:2;left:0;right:0;bottom:0;height:calc(52px + env(safe-area-inset-bottom));background:var(--paper);border-top:1px solid color-mix(in srgb,var(--ink) 25%,transparent)}
+  .runhead{background:var(--paper);top:0;padding-top:max(10px,env(safe-area-inset-top));left:0;right:0;padding-left:16px;padding-right:16px}
+  table.stack thead{display:none}
+  table.stack,table.stack tbody,table.stack tr,table.stack th,table.stack td{display:block;width:100%}
+  table.stack tr{border-top:1px solid var(--rule);padding:.4em 0}
+  table.stack tbody tr:last-child{border-bottom:2px solid var(--ink)}
+  table.stack th[scope=row]{border:0;padding:.1em 0;font-size:1.05em;color:var(--ink);font-weight:600}
+  table.stack td{border:0!important;padding:.14em 0 .14em 4.8em;position:relative}
+  table.stack td::before{content:attr(data-l);position:absolute;left:0;top:.14em;font-family:var(--display);font-weight:700;font-variation-settings:"wdth" 80}
+  .src{position:static;margin-top:1.4em;font-size:.66em}
+  .cols2{grid-template-columns:1fr}
+  .gotchas,.srcs{columns:1}
+  .tabs{top:auto;left:auto;right:max(8px,env(safe-area-inset-right));bottom:max(7px,env(safe-area-inset-bottom));width:auto;height:44px;flex-direction:row;align-items:flex-end;gap:3px;padding:0}
+  .tabs button{writing-mode:horizontal-tb;transform:translateY(8px);min-height:0;height:38px;min-width:30px;justify-content:center;padding:.3em .5em;font-size:.72em}
+  .tabs button .nm{display:none}
+  .tabs button.cur{transform:translateY(0);box-shadow:0 -3px 0 var(--ink)}
+  .tabs button:hover{transform:translateY(4px)}
+  .tabs button.cur::after{left:calc(10% + var(--prog,0) * 80% - 3px);top:-9px;width:2px;height:6px;transition:left .4s}
+  .folio{bottom:max(5px,env(safe-area-inset-bottom));left:max(4px,env(safe-area-inset-left))}
+  .folio .ttl{display:none}
+  .folio .num{font-size:1.9em}
+  .folio button{padding:.15em .45em}
+  .stamp{display:none}
+  .runhead .rt{display:none}
+  .path{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .path div{border-bottom:1px solid var(--rule);font-size:.62em}
+  .path div span{display:none}
+  .readout{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .readout.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .readout.hero b{font-size:2.2em}
+  .cover{display:grid!important;align-content:end;padding:var(--padt) 16px calc(var(--padb) + 14px)!important}
+  .cover .slab{padding:16px 16px 14px}
+  .title{font-size:clamp(4.2rem,25vw,8rem)}
+  .big{font-size:clamp(2.6rem,13vw,4.4rem)}
+  h2{font-size:clamp(1.8rem,8.2vw,2.6rem)}
+  table.t{font-size:.8em}
+  .hide-sm{display:none!important}
+  .code pre{font-size:11.5px}
+  .ctl{grid-template-columns:minmax(6.6em,auto) 1fr 3.2em;gap:0 .6em}
+  .lede{font-size:1.1em}
+}
+@media (max-height: 520px) and (orientation: landscape){
+  :root{--padt:calc(30px + env(safe-area-inset-top));--padb:calc(50px + env(safe-area-inset-bottom));--fs:15px}
+  .slide.has-plate{flex-direction:row}
+  .slide.has-plate .pg{flex:1 1 54%}
+  .plate{order:2;flex:0 0 42%;width:42%;height:auto;align-self:stretch;margin:16px max(16px,env(safe-area-inset-right)) 4.4em 8px}
+  .pg.two,.pg.two.even{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-content:start}
+  .fig{margin-top:0}
+  .cover{align-content:center}
+  .title{font-size:22vh}
+  .cover .sub{font-size:1rem}
+  .cover .slab{max-width:76%}
+  h2{font-size:1.6rem}
+  .runhead{padding-top:6px;font-size:.6em}
+  .cols2{grid-template-columns:1fr 1fr}
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{transition-duration:0s!important;animation-duration:0s!important}
+}
+</style>
+
+<div id="proof" aria-hidden="true"></div>
+<canvas id="gpu" aria-hidden="true"></canvas>
+<canvas id="cpu" aria-hidden="true"></canvas>
+<canvas id="ink" aria-hidden="true"></canvas>
+
+<div id="deck">
+<header class="runhead" aria-hidden="true"><span><b>Paged</b>a press run on serving open models</span><span class="rt" id="rh"></span></header>
+
+<main id="stage">
+
+<!-- 1 -->
+<section class="slide cover on" id="cover" data-ch="0" data-scene="cover" data-plate="full" aria-label="Paged: cover">
+  <div class="slab">
+    <h1 class="title" aria-label="Paged"><span class="ghost">Paged</span><span class="a" aria-hidden="true">Paged</span><span class="b" aria-hidden="true">Paged</span></h1>
+    <p class="sub">Serving open-weight models yourself with <b>vLLM</b> and <b>SGLang</b>: from the HTTP request down to the memory page, ending with a working server on a DGX Spark.</p>
+    <div class="meta"><span>A press run of <span id="nPages">25</span> pages · checked against the docs on 16 November 2026</span><span id="coverEngine">Behind this card an inference server is being simulated live: each square is a KV-cache page, each dot a token streaming out.</span></div>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="slide" id="server" data-ch="0" data-scene="calm" aria-label="What an inference server does">
+  <div class="pg two">
+    <div class="tx">
+      <h2>What an inference server does</h2>
+      <p class="lede">It turns a folder of weights and a GPU into one HTTP endpoint that many people can call at once, and keeps that GPU busy.</p>
+      <ol class="rule">
+        <li><b>Speaks HTTP.</b> OpenAI-style <code>/v1/chat/completions</code> and <code>/v1/responses</code>, plus <code>/health</code> and <code>/metrics</code>. vLLM also answers Anthropic-style <code>/v1/messages</code>.</li>
+        <li><b>Tokenises</b> the prompt with the model's chat template.</li>
+        <li><b>Schedules:</b> at every step it decides which requests run.</li>
+        <li><b>Manages KV-cache memory</b> in fixed-size pages.</li>
+        <li><b>Runs the model:</b> one <em>prefill</em> pass over the prompt, then one <em>decode</em> step per new token.</li>
+        <li><b>Streams</b> tokens back and parses reasoning and tool calls.</li>
+      </ol>
+    </div>
+    <div class="fig">
+      <table class="t" aria-label="Current releases">
+        <thead><tr><th>Engine</th><th>Latest release</th></tr></thead>
+        <tbody>
+          <tr><td><b>vLLM</b></td><td><code>v0.33.0</code>, 2 Nov 2026. Wheels and images are CUDA 13.0 only, on PyTorch 2.14.</td></tr>
+          <tr><td><b>SGLang</b></td><td><code>v0.5.23</code>, 2 Nov 2026. Adds opt-in “Paged Experts” and LoRA on FP8 and NVFP4 MoE models.</td></tr>
+        </tbody>
+      </table>
+      <p class="small muted" style="margin-top:1em">Both are Apache-2.0 and do all six jobs. They differ in how they schedule, cache and parallelise. That difference is most of this guide.</p>
+    </div>
+    <p class="src"><b>Sources:</b> vLLM docs, online serving (endpoint list) · github.com/vllm-project/vllm/releases · github.com/sgl-project/sglang/releases.</p>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="slide has-plate" id="path" data-ch="0" data-scene="path" aria-label="The request path">
+  <div class="pg">
+    <div class="tx">
+      <h2>The request path</h2>
+      <div class="path" id="stations">
+        <div data-st="http"><b>HTTP</b><span>POST arrives</span></div>
+        <div data-st="tok"><b>Tokenise</b><span>chat template</span></div>
+        <div data-st="wait"><b>Queue</b><span>waits for a slot</span></div>
+        <div data-st="sched"><b>Schedule</b><span>gets pages</span></div>
+        <div data-st="prefill"><b>Prefill</b><span>whole prompt</span></div>
+        <div data-st="decode"><b>Decode</b><span>1 token per step</span></div>
+        <div data-st="stream"><b>Stream</b><span>SSE chunks</span></div>
+      </div>
+      <p><b>Prefill</b> reads the prompt in parallel and writes its keys and values into KV pages. <b>Decode</b> then adds one token per step to every running request.</p>
+      <p><em>Time to first token</em> (TTFT) is queueing plus prefill. <em>Inter-token latency</em> (ITL) is the length of one decode step, which everyone in the batch shares.</p>
+      <p class="small muted">The pearl pages on the plate belong to one request; the thread joins them in logical order. Tap any other page to follow that request instead.</p>
+    </div>
+    <p class="src"><b>Sources:</b> vLLM docs: Optimization &amp; tuning (TTFT, ITL), online serving. The plate is a simulation.</p>
+  </div>
+  <div class="plate" data-plate data-pick><div class="cap"><span class="live" data-live>following a request…</span><span class="key"><span><i style="--c:var(--ink)"></i>the request you follow</span><span><i style="--c:var(--pink)"></i><i style="--c:var(--blue)"></i>other requests</span><span><i class="ring" style="--c:var(--ink2)"></i>free page</span></span></div></div>
+</section>
+
+<!-- 4 -->
+<section class="slide has-plate" id="batching" data-ch="0" data-scene="batch" aria-label="Continuous batching">
+  <div class="pg">
+    <div class="tx">
+      <h2>Continuous batching</h2>
+      <p>Static batching waits for the slowest request. <b>Continuous batching</b> rebuilds the batch at <em>every step</em>: finished requests leave, waiting ones join.</p>
+      <p class="small">vLLM gives each step a token budget. Decodes are served first; what is left goes to prefill chunks (<mark>chunked prefill is on by default</mark>). The docs' rule: a small budget such as 2048 gives better ITL, a large one better TTFT. Try it.</p>
+      <div class="ctl"><label for="ms">--max-num-seqs</label><input id="ms" type="range" min="1" max="128" value="48"><output id="msO">48</output></div>
+      <div class="ctl"><label for="bt">--max-num-batched-tokens</label><input id="bt" type="range" min="256" max="8192" step="256" value="2048"><output id="btO">2048</output></div>
+      <div class="ctl"><label for="ar">arrivals per second</label><input id="ar" type="range" min="1" max="60" value="14"><output id="arO">1.4</output></div>
+      <canvas id="ticker" class="strip" height="90" style="height:4.2em" aria-label="Tokens per step: decode in aqua, prefill in pink"></canvas>
+      <div class="readout"><div><b id="r_itl">–</b>inter-token latency</div><div><b id="r_ttft">–</b>time to first token</div><div><b id="r_tps">–</b>tokens per second</div><div><b id="r_wait">–</b>waiting · running</div></div>
+      <p class="sim-note">Illustrative simulation. The strip shows tokens per step: decode in aqua, prefill in pink, against the budget line.</p>
+    </div>
+    <p class="src"><b>Source:</b> vLLM docs: Optimization &amp; tuning (chunked prefill, decode priority, budget trade-off).</p>
+  </div>
+  <div class="plate" data-plate data-pick><div class="cap"><span class="live" data-live></span><span class="key"><span><i style="--c:var(--pink)"></i><i style="--c:var(--blue)"></i><i style="--c:var(--green)"></i>one colour per request</span><span>dots flying off: tokens streaming out</span></span></div></div>
+</section>
+
+<!-- 5 -->
+<section class="slide" id="kv" data-ch="1" data-scene="calm" aria-label="The KV cache">
+  <div class="pg two">
+    <div class="tx">
+      <h2>The KV cache: what the model remembers</h2>
+      <p>Every attention layer keeps a <b>key</b> and a <b>value</b> vector for every token it has seen, so later tokens never recompute them. The cache grows by one token per decode step, per request.</p>
+      <div class="eq">bytes per token = 2 × layers × KV heads × head dim × bytes per value</div>
+      <p>For <b>Qwen3.8-27B</b>, from its <code>config.json</code>: 64 layers, but only <mark>every 4th is full attention</mark>, so 16 layers keep a growing cache. 4 KV heads, head dimension 256, stored as FP8 (1 byte).</p>
+      <div class="layers" aria-label="64 layers; 16 full-attention layers highlighted" id="layers"></div>
+      <p class="small muted">Pink: 16 full-attention layers. Aqua: 48 linear-attention layers, which keep a fixed-size state instead.</p>
+    </div>
+    <div class="fig">
+      <div class="eq">2 × <b>16</b> × <b>4</b> × <b>256</b> × <b>1 B</b> = 32,768 B</div>
+      <div class="big">32<small>KiB per token</small></div>
+      <div class="eq" style="margin-top:1.2em">× 262,144 tokens, the full context</div>
+      <div class="big">8<small>GiB per full-length request</small></div>
+      <p class="small" style="margin-top:.8em">Hence NVIDIA's warning that <code>--max-num-seqs 8</code> with a 262,144-token limit doesn't guarantee eight full-length requests fit at once.</p>
+    </div>
+    <p class="src"><b>Sources:</b> huggingface.co/nvidia/Qwen3.8-27B-NVFP4 config.json (64 layers, full_attention_interval 4, 4 KV heads, head_dim 256) · NVIDIA recipe (<code>--kv-cache-dtype fp8</code>) · dgx-spark-playbooks, playbook-vllm.</p>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="slide has-plate" id="paged" data-ch="1" data-scene="paged" aria-label="PagedAttention">
+  <div class="pg">
+    <div class="tx">
+      <h2>PagedAttention: memory in pages</h2>
+      <p>Older servers reserved one contiguous slab per request, sized for its maximum length. vLLM's launch post measured <b>60–80 %</b> of KV memory wasted that way.</p>
+      <p>PagedAttention borrows the operating system's trick: cut the cache into fixed-size <b>blocks</b>, hand them out only as tokens arrive, and keep a <b>block table</b> from each request's logical blocks to physical blocks anywhere in memory. Only the last, part-filled block is wasted: <mark>under 4 %</mark>.</p>
+      <p class="small">On the plate each square is one block and each dot one token (16 per block here). The followed request's block table, read back live:</p>
+      <div class="ptab" id="ptab" aria-live="off"></div>
+      <p class="small muted">Blocks can be shared between requests, with reference counts and copy-on-write.</p>
+    </div>
+    <p class="src"><b>Source:</b> “vLLM: Easy, fast, and cheap LLM serving with PagedAttention”, vllm.ai blog, June 2023.</p>
+  </div>
+  <div class="plate" data-plate data-pick><div class="cap"><span class="live" data-live></span><span class="key"><span><i style="--c:var(--ink)"></i>followed request, threaded in logical order</span><span><i class="ring" style="--c:var(--pink)"></i>token slot not yet written</span><span>tap a block to follow its request</span></span></div></div>
+</section>
+
+<!-- 7 -->
+<section class="slide has-plate" id="preempt" data-ch="1" data-scene="preempt" aria-label="When pages run out">
+  <div class="pg">
+    <div class="tx">
+      <h2>When the pages run out</h2>
+      <p>If a running request needs a page and none is free, the scheduler <b>preempts</b> a request: it frees that request's pages and recomputes it later. The log says the sequence <q>is preempted by PreemptionMode.RECOMPUTE mode because there is not enough KV cache space</q>.</p>
+      <p class="small">The docs' fixes: leave <code>--gpu-memory-utilization</code> unset or raise it, or lower <code>--max-num-seqs</code> or <code>--max-num-batched-tokens</code>. Unset, it now defaults to 1.0 with vLLM's extensible KV cache, which sizes itself from memory measured after warm-up.</p>
+      <div class="ctl"><label for="gu">--gpu-memory-utilization</label><input id="gu" type="range" min="26" max="90" value="34"><output id="guO">0.34</output></div>
+      <div class="ctl"><label for="ar2">arrivals per second</label><input id="ar2" type="range" min="1" max="60" value="30"><output id="ar2O">3.0</output></div>
+      <div class="readout"><div><b id="p_pre">–</b>preemptions per second</div><div><b id="p_free">–</b>free pages</div><div><b id="p_ttft">–</b>time to first token</div><div><b id="p_tps">–</b>tokens per second</div></div>
+      <p class="sim-note">Illustrative simulation. Moving the memory slider restarts the simulated server, as it would a real one. Freed pages flash pink.</p>
+    </div>
+    <p class="src"><b>Sources:</b> vLLM docs: Optimization &amp; tuning (Preemption); engine arguments (<code>--gpu-memory-utilization</code>, extensible KV cache).</p>
+  </div>
+  <div class="plate" data-plate data-pick><div class="cap"><span class="live" data-live></span><span class="key"><span><i class="sq" style="--c:#A58BFF"></i>weights</span><span><i style="--c:var(--pink)"></i>KV pages</span><span><i class="hatch"></i>outside vLLM's share</span></span></div></div>
+</section>
+
+<!-- 8 -->
+<section class="slide has-plate" id="prefix" data-ch="1" data-scene="prefix" aria-label="Prefix caching versus RadixAttention">
+  <div class="pg">
+    <div class="tx">
+      <h2>Prefix caching vs RadixAttention</h2>
+      <p class="small">Both engines keep the KV pages of a prompt prefix they have seen before (a system prompt, earlier turns, an agent's tool list) so the next request skips prefill for those tokens.</p>
+      <div class="cols2">
+        <div>
+          <h3>vLLM: hashed blocks</h3>
+          <p class="small">Each <em>full</em> block is keyed by a hash of its parent's hash, its tokens and extras such as LoRA ID or <code>cache_salt</code>. Idle blocks wait in an LRU free queue until reused or evicted.</p>
+        </div>
+        <div>
+          <h3>SGLang: a radix tree</h3>
+          <p class="small">A tree whose edges hold runs of tokens; LRU evicts leaves first. <code>--schedule-policy lpm</code> schedules for cache hits (default <code>fcfs</code>).</p>
+        </div>
+      </div>
+      <svg class="svgbox" viewBox="0 0 600 122" id="radixSvg" aria-label="Hash chain versus radix tree diagram"></svg>
+      <div class="readout"><div><b id="x_hit">–</b>prompt tokens served from cache</div><div><b id="x_grp">–</b>prefixes cached</div><div><b id="x_ev">–</b>evictions so far</div><div><b id="x_ttft">–</b>time to first token</div></div>
+    </div>
+    <p class="src"><b>Sources:</b> vLLM docs: Automatic prefix caching (design) · LMSYS blog, “Fast and expressive LLM inference with RadixAttention and SGLang”, Jan 2024 · docs.sglang.io server arguments.</p>
+  </div>
+  <div class="plate" data-plate data-pick><div class="cap"><span class="live" data-live></span><span class="key"><span><i style="--c:#D4F53C"></i>cached prefix in use (flashes on a hit)</span><span><i class="ring" style="--c:#D4F53C"></i>cached, idle: first to be evicted</span></span></div></div>
+</section>
+
+<!-- 9 -->
+<section class="slide has-plate" id="drive" data-ch="1" data-scene="drive" aria-label="Run the press yourself">
+  <div class="pg">
+    <div class="tx">
+      <h2>Run the press yourself</h2>
+      <p class="small">Everything so far in one machine. Change the traffic and watch paging, batching, cache reuse and eviction respond.</p>
+      <div class="seg" role="group" aria-label="Traffic presets" id="presets"><button type="button" data-p="quiet" aria-pressed="true">Quiet afternoon</button><button type="button" data-p="agents" aria-pressed="false">Agent swarm</button><button type="button" data-p="docs" aria-pressed="false">Long documents</button><button type="button" data-p="over" aria-pressed="false">Overload</button></div>
+      <div class="ctl"><label for="d_ar">arrivals per second</label><input id="d_ar" type="range" min="1" max="80" value="8"><output id="d_arO">0.8</output></div>
+      <div class="ctl"><label for="d_ms">--max-num-seqs<small>batch size</small></label><input id="d_ms" type="range" min="1" max="128" value="32"><output id="d_msO">32</output></div>
+      <div class="ctl"><label for="d_pl">prompt length<small>tokens, mean</small></label><input id="d_pl" type="range" min="64" max="800" step="16" value="320"><output id="d_plO">320</output></div>
+      <div class="ctl"><label for="d_sh">prefix sharing<small>of requests</small></label><input id="d_sh" type="range" min="0" max="100" step="5" value="50"><output id="d_shO">50%</output></div>
+      <div class="readout three hero"><div><b id="d_ttft">–</b>time to first token</div><div><b id="d_itl">–</b>inter-token latency</div><div><b id="d_tps">–</b>tokens per second</div></div>
+      <canvas id="trace" class="strip" height="80" style="height:3.4em" aria-label="Recent history of the three readouts"></canvas>
+      <div class="readout minor"><div><b id="d_hit">–</b>prompt tokens from cache</div><div><b id="d_q">–</b>waiting · running</div><div><b id="d_pre">–</b>preemptions</div><div><b id="d_ev">–</b>prefix evictions</div></div>
+      <p class="sim-note">Illustrative, not a benchmark. Readouts come from the simulation's own clock: one step costs 80 ms (one pass over the weights, page 10) + 1.5 ms per decoding request + 0.04 ms per prefill token.</p>
+    </div>
+  </div>
+  <div class="plate" data-plate data-pick><div class="cap"><span class="live" data-live></span><span class="key"><span><i style="--c:var(--pink)"></i><i style="--c:var(--blue)"></i>requests</span><span><i style="--c:#D4F53C"></i>shared prefix</span><span><i class="ring" style="--c:#D4F53C"></i>idle cache</span><span><i class="sq" style="--c:var(--pink)"></i>flash: freed or evicted</span></span></div></div>
+</section>
+
+<!-- 10 -->
+<section class="slide" id="bound" data-ch="2" data-scene="calm" aria-label="Why decode is memory-bound">
+  <div class="pg two">
+    <div class="tx">
+      <h2>Why decoding is limited by memory, not maths</h2>
+      <p>Each decode step has to stream every weight from memory once, whether it produces 1 token or 8. On a DGX Spark that read sets the pace:</p>
+      <div class="eq">273 GB/s ÷ 21.9 GB of weights ≈ <b>12 steps per second</b></div>
+      <p>So one user would see about 12 tokens/s <span class="est">estimate</span>. There are two ways past the ceiling:</p>
+      <ul class="rule">
+        <li><b>Batch:</b> 8 users share each read and get 8 tokens per step.</li>
+        <li><b>Speculate:</b> check several guessed tokens per read (chapter IV).</li>
+      </ul>
+    </div>
+    <div class="fig">
+      <div class="big">37.29<small>tokens/s, one user</small></div>
+      <p style="margin-top:.6em">NVIDIA's measurement on a 128 GB Spark with the recipe in chapter VI: <code>aiperf</code>, SPEED-Bench coding prompts, 8,192 output tokens, concurrency 1, speculative decoding on. About three times the naive ceiling.</p>
+      <p class="small muted">The estimate assumes the whole checkpoint is read on every step and ignores KV reads.</p>
+    </div>
+    <p class="src"><b>Sources:</b> nvidia.com DGX Spark specs (273 GB/s) · Hugging Face file sizes, nvidia/Qwen3.8-27B-NVFP4 · NVIDIA local-ai-inference-recipes performance.yaml (measured 2026-10-19).</p>
+  </div>
+</section>
+
+<!-- 11 -->
+<section class="slide" id="formats" data-ch="2" data-scene="calm" aria-label="Quantisation formats">
+  <div class="pg two even">
+    <div class="tx">
+      <h2>Four-bit floats</h2>
+      <table class="t">
+        <thead><tr><th>Format</th><th>Each value</th><th>Shared scale</th><th>Bits</th></tr></thead>
+        <tbody>
+          <tr><td><b>BF16</b></td><td>16-bit float</td><td>none</td><td>16</td></tr>
+          <tr><td><b>FP8</b></td><td>8-bit float (E4M3)</td><td>per tensor or channel</td><td>8</td></tr>
+          <tr><td><b>NVFP4</b></td><td>4-bit E2M1</td><td>FP8 per <b>16</b> values, plus FP32 per tensor</td><td>4.5</td></tr>
+          <tr><td><b>MXFP4</b></td><td>4-bit E2M1</td><td>power of two per <b>32</b> values</td><td>4.25</td></tr>
+        </tbody>
+      </table>
+      <p class="small" style="margin-top:.8em">E2M1 has only the magnitudes 0, 0.5, 1, 1.5, 2, 3, 4 and 6. NVFP4's smaller blocks and fractional scales fit each block more closely; NVIDIA puts it at about 3.5× smaller than FP16.</p>
+      <p class="small">Real checkpoints mix formats. NVIDIA's Qwen3.8-27B uses NVFP4 for MLP layers and <code>lm_head</code>, FP8 for attention, and stays within about 1.5 points of BF16 on six benchmarks (GPQA Diamond 88.92 → 88.01).</p>
+    </div>
+    <div class="fig">
+      <svg id="quant" viewBox="0 0 640 372" role="img" aria-label="32 weights quantised to NVFP4 and MXFP4"></svg>
+      <div class="seg" role="group" aria-label="Weights"><button type="button" id="qNew" aria-pressed="false">New weights</button><button type="button" id="qOut" aria-pressed="false">Add an outlier</button></div>
+      <div class="qbar" id="qErr"></div>
+      <p class="sim-note">Live: 32 random weights (hollow) rounded to each format (filled). Dashed ticks mark block boundaries. Add an outlier and watch the shared scale stretch.</p>
+    </div>
+    <p class="src"><b>Sources:</b> NVIDIA Technical Blog, “Introducing NVFP4 for efficient and accurate low-precision inference” · Qwen3.8-27B-NVFP4 model card.</p>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="slide has-plate" id="memory" data-ch="2" data-scene="memory" aria-label="Memory math, worked">
+  <div class="pg">
+    <div class="tx">
+      <h2>Memory math, worked</h2>
+      <p class="small">A 128 GB DGX Spark serving Qwen3.8-27B. Pick a weight format and a memory fraction; the plate re-lays the memory to match.</p>
+      <div class="seg" role="group" aria-label="Weight format" id="fmt">
+        <button type="button" data-f="bf16" aria-pressed="false">BF16</button><button type="button" data-f="fp8" aria-pressed="false">FP8</button><button type="button" data-f="nvfp4" aria-pressed="false">NVFP4 everywhere</button><button type="button" data-f="mixed" aria-pressed="true">NVIDIA's mixed checkpoint</button>
+      </div>
+      <div class="ctl"><label for="mu">--gpu-memory-utilization</label><input id="mu" type="range" min="40" max="90" value="60"><output id="muO">0.60</output></div>
+      <div class="ctl"><label for="mc">context per request</label><input id="mc" type="range" min="0" max="5" value="5"><output id="mcO" style="font-size:.9em">262,144</output></div>
+      <div class="membar" id="membar"><div class="w"></div><div class="d"></div><div class="o"></div><div class="kv"></div><div class="os"></div></div>
+      <div class="memscale"><span>0</span><span>32</span><span>64</span><span>96</span><span>128 GB</span></div>
+      <table class="t" style="margin-top:.7em" id="memtab"></table>
+    </div>
+    <p class="src"><b>Sources:</b> Hugging Face file sizes (21.9 GB target, 3.85 GB DFlash2 draft) · recipe.yaml (0.60 “on purpose”) · config.json. Rows marked ≈ are our estimates; vLLM prints the real KV-cache size at startup.</p>
+  </div>
+  <div class="plate" data-plate><div class="cap"><span class="live" data-live></span><span class="key"><span><i class="sq" style="--c:#A58BFF"></i>weights + draft</span><span><i style="--c:var(--pink)"></i>KV pages</span><span><i class="hatch"></i>outside vLLM's share</span></span></div></div>
+</section>
+
+<!-- 13 -->
+<section class="slide" id="moe" data-ch="3" data-scene="calm" aria-label="Total versus active parameters">
+  <div class="pg two">
+    <div class="tx">
+      <h2>Big MoE models: total sets memory, active sets speed</h2>
+      <p>A mixture-of-experts model stores many expert networks but runs only a few per token. You must <em>hold</em> all of them; each step only <em>reads</em> the active ones.</p>
+      <table class="t">
+        <thead><tr><th>Model</th><th>Total / active</th><th>Experts per token</th><th>Weights</th></tr></thead>
+        <tbody>
+          <tr><td><b>Kimi K3.1 Pro</b></td><td>2.8T / 104B</td><td>16 of 896, + 2 shared</td><td>MXFP4, 1,561 GB</td></tr>
+          <tr><td><b>Mistral Large 4</b></td><td>~1T / 49B</td><td>4 of 128, + 1 shared</td><td>FP8 1,061 GB; NVFP4 610 GB</td></tr>
+          <tr><td><b>gpt-oss-120b</b></td><td>117B / 5.1B</td><td class="muted">not on the card</td><td>MXFP4, 65.2 GB</td></tr>
+          <tr><td><b>Qwen3.8-27B</b></td><td>27B dense</td><td>n/a</td><td>mixed NVFP4, 21.9 GB</td></tr>
+        </tbody>
+      </table>
+      <p class="small" style="margin-top:.7em">Even if Kimi K3.1 Pro fitted, each token would read 104B × 4.25 bits ≈ 55 GB: about 5 steps per second at 273 GB/s <span class="est">estimate</span>.</p>
+    </div>
+    <div class="fig">
+      <svg class="sizes" id="sizes" viewBox="0 0 520 330" role="img" aria-label="Checkpoint sizes compared with one and four DGX Sparks"></svg>
+      <p class="small muted">NVIDIA rates one 128 GB Spark for models up to 200B parameters, two for 400B and four for 700B.</p>
+    </div>
+    <p class="src"><b>Sources:</b> Hugging Face model cards and file sizes (moonshotai/Kimi-K3.1-Pro, mistralai/Mistral-Large-4-1T-A52B and -NVFP4, openai/gpt-oss-120b, nvidia/Qwen3.8-27B-NVFP4) · nvidia.com DGX Spark.</p>
+  </div>
+</section>
+
+<!-- 14 -->
+<section class="slide" id="parallel" data-ch="3" data-scene="calm" aria-label="Tensor and expert parallelism">
+  <div class="pg two even">
+    <div class="tx">
+      <h2>Tensor and expert parallelism</h2>
+      <p><b>Tensor parallelism (TP)</b> slices every layer's matrices across GPUs. Every GPU works on every token.</p>
+      <p><b>Expert parallelism (EP)</b> puts <em>whole experts</em> on different GPUs and sends each token to the GPUs holding its chosen experts. In vLLM <mark>EP size = TP × DP</mark>; with TP = 1, attention is replicated on every data-parallel rank.</p>
+      <div class="code"><pre>vllm serve deepseek-ai/DeepSeek-V3-0324 \
+  --tensor-parallel-size 1 \
+  --data-parallel-size 8 \
+  --enable-expert-parallel</pre><span class="label">vLLM docs, 8 GPUs</span></div>
+      <p class="small">SGLang: <code>--tp-size</code>, <code>--ep-size</code>, <code>--dp-size</code>. In vLLM, <code>--enable-eplb</code> rebalances hot experts and <code>--all2all-backend</code> picks the transport (DeepEP, FlashInfer NVLink, MoRI).</p>
+    </div>
+    <div class="fig">
+      <div class="seg" role="group" aria-label="Parallelism mode" id="pmode"><button type="button" data-m="tp" aria-pressed="false">TP = 8</button><button type="button" data-m="ep" aria-pressed="true">EP = 8 (TP 1 × DP 8)</button></div>
+      <svg class="svgbox" id="epSvg" viewBox="0 0 560 360" role="img" aria-label="Eight GPUs holding sliced layers or whole experts"></svg>
+      <p class="small muted">Sparks link over ConnectX-7 at 200 Gb/s: two or three with one QSFP cable, four through a switch. NVIDIA has a separate cluster playbook.</p>
+    </div>
+    <p class="src"><b>Sources:</b> vLLM docs: Expert parallel deployment · docs.sglang.io server arguments · nvidia.com DGX Spark; dgx-spark-playbooks (playbook-vllm-cluster).</p>
+  </div>
+</section>
+
+<!-- 15 -->
+<section class="slide has-plate" id="spec" data-ch="3" data-scene="spec" aria-label="Speculative decoding">
+  <div class="pg">
+    <div class="tx">
+      <h2>Speculative decoding</h2>
+      <p>A small, fast <b>draft</b> proposes <i>k</i> tokens. The big model checks all <i>k</i> in <b>one</b> pass, which costs about the same as a single step when memory is the limit. It keeps the longest correct run and adds one token of its own.</p>
+      <div class="specrow" id="specrow" aria-hidden="true"></div>
+      <div class="ctl"><label for="sa">acceptance rate</label><input id="sa" type="range" min="30" max="95" value="70"><output id="saO">0.70</output></div>
+      <div class="ctl"><label for="sk">num_speculative_tokens</label><input id="sk" type="range" min="1" max="8" value="7"><output id="skO">7</output></div>
+      <div class="eq">tokens per pass = (1 − a<sup>k+1</sup>) / (1 − a) = <b id="specE">–</b></div>
+      <p class="small">vLLM's standard rejection sampler is <mark>lossless</mark> up to numerical precision. Its methods include EAGLE, MTP, draft models, n-gram, suffix, LiLiCorr and the parallel drafters DFlash and DSpark; v0.33.0 removed Medusa. The docs aim it at low-to-medium load.</p>
+      <p class="sim-note">The formula is the textbook expectation for independent acceptances, an illustration. The Spark recipe runs DFlash with 7 speculative tokens.</p>
+    </div>
+    <p class="src"><b>Sources:</b> vLLM docs: Speculative decoding · vLLM v0.33.0 release notes · NVIDIA recipe.yaml.</p>
+  </div>
+  <div class="plate" data-plate data-pick><div class="cap"><span class="live" data-live></span><span class="key"><span>8 requests, as on the Spark · pages now fill several tokens per step</span></span></div></div>
+</section>
+
+<!-- 16 -->
+<section class="slide" id="versus" data-ch="4" data-scene="calm" aria-label="vLLM or SGLang">
+  <div class="pg">
+    <div class="tx">
+      <h2>vLLM or SGLang</h2>
+      <table class="t stack">
+        <thead><tr><th></th><th>vLLM <span class="muted small">v0.33.0</span></th><th>SGLang <span class="muted small">v0.5.23</span></th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Its own pitch</th><td>“State-of-the-art serving throughput”, with broad hardware support</td><td>“Optimized for agentic workloads, large-scale serving, and RL rollouts”</td></tr>
+          <tr><th scope="row">Memory knob</th><td><code>--gpu-memory-utilization</code></td><td><code>--mem-fraction-static</code></td></tr>
+          <tr><th scope="row">Prefix reuse</th><td>Automatic prefix caching: hashed full blocks</td><td>RadixAttention: token radix tree, cache-aware scheduling</td></tr>
+          <tr><th scope="row">Parallelism</th><td><code>-tp</code>, <code>-dp</code>, <code>-pp</code>, <code>--enable-expert-parallel</code></td><td><code>--tp-size</code>, <code>--dp-size</code>, <code>--ep-size</code>, prefill/decode disaggregation</td></tr>
+          <tr><th scope="row">Speculation</th><td><code>--speculative-config '{…}'</code></td><td><code>--speculative-algorithm</code>: EAGLE, EAGLE3, NEXTN, STANDALONE, NGRAM</td></tr>
+          <tr><th scope="row">On DGX Spark</th><td>NVIDIA's “optimized” recipe: Qwen3.8-27B NVFP4, port 8000</td><td>Playbook validated with gpt-oss-20b/120b, Llama 3.3 70B and Qwen3-32B NVFP4; port 30000</td></tr>
+          <tr><th scope="row">Recently broke</th><td>Python 3.10 and Medusa dropped; CORS no longer open; CUDA 13.0 only</td><td>Python 3.11+ required since v0.5.22</td></tr>
+        </tbody>
+      </table>
+      <p style="margin-top:.9em;max-width:52em"><b>Our judgement:</b> start with the engine your hardware vendor has a validated recipe for; on a Spark today that is vLLM. Choose SGLang when traffic is many multi-turn or agent sessions sharing long prefixes. Both speak the OpenAI API, so switching later means changing one URL.</p>
+    </div>
+    <p class="src"><b>Sources:</b> both GitHub READMEs and release notes · vLLM engine arguments · docs.sglang.io server arguments · NVIDIA recipes · dgx-spark-playbooks (SGLang).</p>
+  </div>
+</section>
+
+<!-- 17 -->
+<section class="slide" id="when" data-ch="4" data-scene="calm" aria-label="When self-hosting beats an API">
+  <div class="pg">
+    <div class="tx">
+      <h2>When self-hosting beats an API</h2>
+      <div class="cols2">
+        <div>
+          <h3>Host it yourself when…</h3>
+          <ul class="rule">
+            <li><b>Data must stay put.</b> Prompts never leave the box.</li>
+            <li><b>Load is steady.</b> The box costs the same whether it serves 1 user or 8; its GB10 has a 140 W TDP.</li>
+            <li><b>You need a pinned model.</b> Pin image, model and code revisions and nothing changes under you.</li>
+            <li><b>Prompts share long prefixes,</b> as agent loops and RAG do. Cache hits skip prefill.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Use an API when…</h3>
+          <ul class="rule">
+            <li><b>The model doesn't fit.</b> Kimi K3.1 Pro's 1,561 GB of weights is about 12 Sparks of memory.</li>
+            <li><b>Load is bursty.</b> You'd pay for an idle box most of the day.</li>
+            <li><b>One user needs speed.</b> 37 tokens/s is good; hosted fleets on bigger GPUs are faster.</li>
+            <li><b>You can't own operations:</b> security patches and upgrades that move flags.</li>
+          </ul>
+        </div>
+      </div>
+      <p class="small muted" style="margin-top:.8em">Our judgement, built on numbers sourced elsewhere in this guide. Not a price comparison.</p>
+    </div>
+    <p class="src"><b>Sources:</b> nvidia.com DGX Spark specs · NVIDIA recipe.yaml (security note) · vLLM release notes · Hugging Face file sizes.</p>
+  </div>
+</section>
+
+<!-- 18 -->
+<section class="slide has-plate" id="spark" data-ch="5" data-scene="spark" aria-label="Your box: DGX Spark">
+  <div class="pg">
+    <div class="tx">
+      <h2>Your box: DGX Spark</h2>
+      <dl class="spec">
+        <dt>Chip</dt><dd><b>GB10</b> Grace Blackwell: 20 Arm cores and a Blackwell GPU</dd>
+        <dt>Memory</dt><dd><b>128 GB</b> LPDDR5X, unified, <b>273 GB/s</b></dd>
+        <dt>Network</dt><dd>ConnectX-7 at 200 Gb/s; 10 GbE; Wi-Fi 7</dd>
+        <dt>Power, size</dt><dd>GB10 TDP 140 W, 240 W supply; 150 × 150 × 50.5 mm, 1.2 kg</dd>
+        <dt>Our model</dt><dd><b>nvidia/Qwen3.8-27B-NVFP4</b>: 21.9 GB, 262,144-token context, Apache-2.0</dd>
+        <dt>Validated</dt><dd>2026-10-19, vLLM 0.31.0 with NVIDIA patches, in <code>nvcr.io/nvidia/vllm:26.10.pre1-py3</code></dd>
+      </dl>
+      <p class="small muted" style="margin-top:.8em">The plate runs this configuration: 8 sequences, speculative decoding on, 60 % of memory for vLLM.</p>
+    </div>
+    <p class="src"><b>Sources:</b> nvidia.com/en-us/products/workstations/dgx-spark · NVIDIA local-ai-inference-recipes (qwen3.8-27b / dgx-spark / vllm / 128gb / nvfp4) · model card.</p>
+  </div>
+  <div class="plate" data-plate data-pick><div class="cap"><span class="live" data-live></span><span class="key"><span><i class="sq" style="--c:#A58BFF"></i>weights + draft, 25.8 GB</span><span><i style="--c:var(--pink)"></i>KV pages</span><span><i class="hatch"></i>the 40 % left to the OS</span></span></div></div>
+</section>
+
+<!-- 19 -->
+<section class="slide" id="step1" data-ch="5" data-scene="calm" aria-label="Steps 1 and 2: prepare and download">
+  <div class="pg codepg">
+    <div class="tx">
+      <h2>Steps 1–2: prepare, then download</h2>
+      <p class="small">Run these on the Spark itself (DGX OS, Ubuntu-based). Docker must work without <code>sudo</code>.</p>
+      <p class="small">Downloads total about 26 GB. The image is public on NGC; if a pull fails with <code>unauthorized</code>, run <code>docker logout nvcr.io</code>.</p>
+      <p class="small">Use a <em>read-only</em> Hugging Face token. Both models are Apache-2.0 and ungated.</p>
+    </div>
+    <div class="fig">
+      <div class="code"><pre><span class="c"># 1 · Docker for your user, plus the NVIDIA container runtime</span>
+sudo usermod -aG docker $USER &amp;&amp; newgrp docker
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+
+<span class="c"># 2 · the validated image and the two checkpoints</span>
+docker pull nvcr.io/nvidia/vllm:26.10.pre1-py3
+export HF_TOKEN=hf_…            <span class="c"># read-only token</span>
+hf download nvidia/Qwen3.8-27B-NVFP4        <span class="c"># 21.9 GB target</span>
+hf download z-lab/Qwen3.8-27B-DFlash2       <span class="c">#  3.85 GB draft</span>
+
+<span class="c"># optional, from the playbook: faster downloads</span>
+HF_HUB_DISABLE_XET=1 hf download nvidia/Qwen3.8-27B-NVFP4</pre><button class="copy" type="button">copy</button></div>
+    </div>
+    <p class="src"><b>Sources:</b> dgx-spark-playbooks/nvidia/playbook-vllm README (updated 10/19/2026) · recipe.yaml setup instructions.</p>
+  </div>
+</section>
+
+<!-- 20 -->
+<section class="slide" id="step3" data-ch="5" data-scene="calm" aria-label="Step 3: launch vLLM">
+  <div class="pg codepg">
+    <div class="tx">
+      <h2>Step 3: launch vLLM</h2>
+      <p class="small">NVIDIA's validated flags, exactly as in the playbook's 128 GB launch script. It binds to loopback.</p>
+      <ul class="rule small">
+        <li><code>0.60</code> on purpose: at 0.85 the node hung during startup autotune, and 0.70 took nodes down on some runs.</li>
+        <li>Mount <em>only</em> <code>~/.cache/huggingface</code>; the image keeps prebuilt kernel caches under <code>/root/.cache</code>.</li>
+        <li><code>dflash</code> with prefix caching needs the fix in vllm#60252, which this image has.</li>
+        <li>Text only? Add <code>--language-model-only</code> to skip the vision encoder.</li>
+      </ul>
+    </div>
+    <div class="fig">
+      <div class="code"><pre>docker run -d --name vllm-qwen38 \
+  --gpus all --ipc host --network host \
+  --shm-size=16g --ulimit memlock=-1 --ulimit stack=67108864 \
+  --entrypoint "" \
+  -e HF_TOKEN="${HF_TOKEN:-}" \
+  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
+  nvcr.io/nvidia/vllm:26.10.pre1-py3 \
+  vllm serve nvidia/Qwen3.8-27B-NVFP4 \
+    --host 127.0.0.1 --port 8000 \
+    --kv-cache-dtype fp8 \
+    --max-model-len 262144 \
+    --max-num-seqs 8 \
+    --async-scheduling \
+    --enable-flashinfer-autotune \
+    --gpu-memory-utilization 0.60 \
+    --kernel-config '{"linear_backend":"nvfp4_dynamic","nvfp4_dynamic_max_tokens":16,"unquantized_linear_backend":"flashinfer_cudnn","linear_backend_per_quant":{"fp8_w8a8":"cutlass"}}' \
+    --speculative-config '{"method":"dflash","model":"z-lab/Qwen3.8-27B-DFlash2","num_speculative_tokens":7,"draft_sample_method":"probabilistic","rejection_sample_method":"standard"}' \
+    --compilation-config '{"pass_config":{"fuse_act_quant":true},"max_cudagraph_capture_size":64}' \
+    --reasoning-parser qwen3 \
+    --tool-call-parser qwen3_xml \
+    --enable-auto-tool-choice
+
+<span class="c"># wait until it answers, then watch the log</span>
+until curl -sf localhost:8000/health; do sleep 10; done; echo ready
+docker logs --tail 50 --follow vllm-qwen38</pre><button class="copy" type="button">copy</button></div>
+    </div>
+    <p class="src"><b>Sources:</b> dgx-spark-playbooks …/playbook-vllm/assets/sync-vllm-spark-128gb-qwen38-27b.sh · recipe.yaml limitations and notes (commit 7d1162c).</p>
+  </div>
+</section>
+
+<!-- 21 -->
+<section class="slide" id="step4" data-ch="5" data-scene="calm" aria-label="Step 4: test with curl">
+  <div class="pg codepg">
+    <div class="tx">
+      <h2>Step 4: test it with curl</h2>
+      <p class="small">Health, the model ID, a chat reply, a tool call, then the live metrics.</p>
+      <p class="small">The tool test should return a <code>tool_calls</code> entry for <code>get_weather</code> with <code>finish_reason: "tool_calls"</code>.</p>
+      <p class="small">The last line prints the numbers you drove on page 9. Divide each <code>_sum</code> by its <code>_count</code> for mean TTFT and ITL; hits ÷ queries is the cache hit rate.</p>
+    </div>
+    <div class="fig">
+      <div class="code"><pre>curl --fail-with-body -i  http://localhost:8000/health
+curl --fail-with-body -sS http://localhost:8000/v1/models
+
+curl --fail-with-body -sS http://localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"nvidia/Qwen3.8-27B-NVFP4",
+       "messages":[{"role":"user","content":"Reply with a short greeting."}],
+       "max_tokens":4096}'
+
+curl --fail-with-body -sS http://localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"nvidia/Qwen3.8-27B-NVFP4",
+       "messages":[{"role":"user","content":"Use get_weather to look up the weather in Boston."}],
+       "tools":[{"type":"function","function":{"name":"get_weather",
+         "description":"Get current weather for a location.",
+         "parameters":{"type":"object","properties":{"location":{"type":"string"}},
+                       "required":["location"]}}}],
+       "tool_choice":"auto","max_tokens":4096}'
+
+<span class="c"># the scheduler, live</span>
+curl -s localhost:8000/metrics | grep -E '^vllm:(num_requests_(running|waiting)|kv_cache_usage_perc|prefix_cache_(queries|hits)|(time_to_first_token|inter_token_latency)_seconds_(sum|count))'</pre><button class="copy" type="button">copy</button></div>
+    </div>
+    <p class="src"><b>Sources:</b> dgx-spark-playbooks playbook-vllm README (test commands) · vLLM docs: Metrics design (metric names).</p>
+  </div>
+</section>
+
+<!-- 22 -->
+<section class="slide" id="step5" data-ch="5" data-scene="calm" aria-label="Step 5: Python and streaming">
+  <div class="pg codepg">
+    <div class="tx">
+      <h2>Step 5: Python, streaming, from your laptop</h2>
+      <p class="small">The server listens only on loopback, so open an SSH tunnel from your laptop and leave it running.</p>
+      <p class="small">Any OpenAI SDK works; the client just needs some string as a key. If you ever bind to <code>0.0.0.0</code>, vLLM's security guide says not to rely on <code>--api-key</code> alone: put a reverse proxy in front.</p>
+      <p class="small">For scale: NVIDIA measured 37.29 tokens/s on long coding outputs. Your prompts will differ.</p>
+    </div>
+    <div class="fig">
+      <div class="code"><pre><span class="c"># on the laptop</span>
+ssh -N -L 8000:127.0.0.1:8000 you@spark-host
+pip install openai</pre><button class="copy" type="button">copy</button></div>
+      <div class="code"><pre><span class="k">import</span> time
+<span class="k">from</span> openai <span class="k">import</span> OpenAI
+
+client = OpenAI(base_url=<span class="s">"http://localhost:8000/v1"</span>, api_key=<span class="s">"unused"</span>)
+MODEL = <span class="s">"nvidia/Qwen3.8-27B-NVFP4"</span>
+
+<span class="c"># 1 · stream tokens as they are decoded, and time the first one</span>
+t0 = time.time(); first = <span class="k">None</span>
+stream = client.chat.completions.create(
+    model=MODEL, max_tokens=4096, stream=<span class="k">True</span>,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Explain a KV cache in two sentences."</span>}])
+<span class="k">for</span> chunk <span class="k">in</span> stream:
+    <span class="k">if</span> chunk.choices <span class="k">and</span> chunk.choices[0].delta.content:
+        first = first <span class="k">or</span> time.time()
+        print(chunk.choices[0].delta.content, end=<span class="s">""</span>, flush=<span class="k">True</span>)
+print(f<span class="s">"\nTTFT {first - t0:.2f} s"</span>)
+
+<span class="c"># 2 · rough tokens per second (includes prefill)</span>
+t = time.time()
+r = client.chat.completions.create(model=MODEL, max_tokens=2048,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Write a Python LRU cache with tests."</span>}])
+print(r.usage.completion_tokens / (time.time() - t), <span class="s">"tokens/s"</span>)</pre><button class="copy" type="button">copy</button></div>
+    </div>
+    <p class="src"><b>Sources:</b> playbook-vllm README (SSH tunnel) · vLLM docs: Security (API key limitations, reverse proxy). The Python is ours, written against the OpenAI SDK.</p>
+  </div>
+</section>
+
+<!-- 23 -->
+<section class="slide" id="sglang" data-ch="5" data-scene="calm" aria-label="Alternative: SGLang on the same box">
+  <div class="pg codepg">
+    <div class="tx">
+      <h2>Same box, other engine: SGLang</h2>
+      <p class="small">NVIDIA's SGLang playbook validates <b>gpt-oss-120b</b> on the Spark (MXFP4, 65.2 GB, 5.1B of 117B parameters active per token), so you can try a MoE model.</p>
+      <p class="small">Stop the vLLM container first. The playbook starts at <code>--mem-fraction-static 0.85</code> and suggests 0.7–0.75 on unified memory; 0.75 and the 32K context are our choices (its default context is 8192).</p>
+      <p class="small">To check prefix caching, send the same conversation twice: the log's <code>#cached-token</code> count should rise above 0.</p>
+    </div>
+    <div class="fig">
+      <div class="code"><pre>docker stop vllm-qwen38
+
+export SGLANG_IMAGE="lmsysorg/sglang:latest-cu130"   <span class="c"># CUDA 13 build for Blackwell</span>
+export MODEL_HANDLE="openai/gpt-oss-120b"
+docker pull "$SGLANG_IMAGE"
+
+docker run -d --name sglang-server \
+  --gpus all --ipc host --cap-add SYS_NICE \
+  --ulimit memlock=-1 --ulimit stack=67108864 \
+  -p 30000:30000 \
+  -e HF_TOKEN="$HF_TOKEN" \
+  -v "$HOME/.cache/huggingface/hub:/root/.cache/huggingface/hub" \
+  "$SGLANG_IMAGE" \
+  sglang serve --model-path "$MODEL_HANDLE" \
+    --host 0.0.0.0 --port 30000 \
+    --context-length 32768 \
+    --mem-fraction-static 0.75 \
+    --attention-backend flashinfer \
+    --enable-cache-report \
+    --trust-remote-code
+
+timeout 900 bash -c 'until curl -sf localhost:30000/health &gt;/dev/null; do sleep 10; done'
+curl -s localhost:30000/v1/chat/completions -H "Content-Type: application/json" \
+  -d '{"model":"openai/gpt-oss-120b","messages":[{"role":"user","content":"Hello"}],"max_tokens":256}'
+docker logs sglang-server 2&gt;&amp;1 | grep cached-token</pre><button class="copy" type="button">copy</button></div>
+    </div>
+    <p class="src"><b>Sources:</b> dgx-spark-playbooks/nvidia/playbook-sglang README · openai/gpt-oss-120b model card and file sizes. Note: <code>-p 30000:30000</code> with <code>0.0.0.0</code> exposes the port on your network.</p>
+  </div>
+</section>
+
+<!-- 24 -->
+<section class="slide" id="gotchas" data-ch="6" data-scene="calm" aria-label="Gotchas">
+  <div class="pg">
+    <div class="tx">
+      <h2>Gotchas, collected</h2>
+      <ol class="rule gotchas">
+        <li><b>Unified memory isn't a normal GPU.</b> <code>nvidia-smi --query-gpu</code> memory fields read <code>N/A</code>; use plain <code>nvidia-smi</code>. Under pressure, flush the page cache: <code>sudo sh -c 'sync; echo 3 &gt; /proc/sys/vm/drop_caches'</code>.</li>
+        <li><b>A higher memory fraction isn't always better.</b> 0.85 hung the Spark during autotune.</li>
+        <li><b>Reasoning eats tokens.</b> <code>content: null</code> with <code>finish_reason: length</code> means raise <code>max_tokens</code>.</li>
+        <li><b>Context isn't free.</b> At 32 KiB per token, eight 262K-token requests need about 69 GB of KV <span class="est">estimate</span>.</li>
+        <li><b><code>0.0.0.0</code> means everyone.</b> The recipe's default bind exposes an unauthenticated API. Use loopback and a tunnel, or a firewall and a proxy.</li>
+        <li><b>Upgrades move flags.</b> vLLM v0.33.0 ships CUDA 13.0 only and removed Medusa; v0.32.0 dropped Python 3.10. SGLang v0.5.22 needs Python 3.11+.</li>
+        <li><b>Hybrid models confuse cache checks.</b> SGLang's <code>cached-token</code> stays 0 for mamba/SSM hybrids; validate with a standard-attention model.</li>
+        <li><b>Root-owned caches.</b> SGLang's container writes weights as root, so deleting them needs <code>sudo rm -rf</code>.</li>
+      </ol>
+    </div>
+    <p class="src"><b>Sources:</b> playbook-vllm and playbook-sglang READMEs (troubleshooting) · recipe.yaml limitations · vLLM and SGLang release notes · this guide's KV maths.</p>
+  </div>
+</section>
+
+<!-- 25 -->
+<section class="slide has-plate" id="colophon" data-ch="6" data-scene="colophon" aria-label="Sources and colophon">
+  <div class="pg">
+    <div class="tx">
+      <h2>Sources &amp; colophon</h2>
+      <ol class="srcs">
+        <li>github.com/vllm-project/vllm: README, releases v0.31.0 to v0.33.0</li>
+        <li>github.com/sgl-project/sglang: README, releases v0.5.21 to v0.5.23</li>
+        <li>docs.vllm.ai: engine arguments, optimization &amp; tuning, prefix-caching design, speculative decoding, expert-parallel deployment, online serving, metrics, security</li>
+        <li>docs.sglang.io: server arguments</li>
+        <li>lmsys.org/blog/2024-01-17-sglang: RadixAttention</li>
+        <li>vllm.ai/blog/2023-06-20-vllm: PagedAttention</li>
+        <li>github.com/NVIDIA/dgx-spark-playbooks: playbook-vllm (README, 128 GB launch script), playbook-sglang</li>
+        <li>github.com/NVIDIA/local-ai-inference-recipes: qwen3.8-27b, dgx-spark, vllm, 128gb, nvfp4 (recipe.yaml, performance.yaml)</li>
+        <li>nvidia.com/en-us/products/workstations/dgx-spark</li>
+        <li>developer.nvidia.com blog: Introducing NVFP4</li>
+        <li>Hugging Face: nvidia/Qwen3.8-27B-NVFP4, z-lab/Qwen3.8-27B-DFlash2, moonshotai/Kimi-K3.1-Pro, mistralai/Mistral-Large-4-1T-A52B (and -NVFP4), openai/gpt-oss-120b</li>
+      </ol>
+      <p class="small muted" style="margin-top:.8em">All read on 16 November 2026. Set in Bricolage Grotesque, Newsreader and Courier Prime. Screen-printed live in four inks (aqua, fluorescent pink, acid lime and pearl) on aubergine stock by WGSL compute shaders, with a Canvas 2D press as understudy. Figures marked ≈ are estimates; the plates are illustrative simulations.</p>
+    </div>
+  </div>
+  <div class="plate" data-plate data-pick><div class="cap"><span class="live" data-live></span></div></div>
+</section>
+
+</main>
+
+<nav class="tabs" id="tabs" aria-label="Chapters"></nav>
+<div class="folio"><button type="button" id="prev" aria-label="Previous page">‹</button><span class="num" id="pg">01</span><span class="of" id="of">of 25</span><button type="button" id="next" aria-label="Next page">›</button><span class="ttl" id="pgt"></span></div>
+<div class="chromebar" aria-hidden="true"></div>
+<div class="stamp" id="stamp">inking the plate…</div>
+</div>
+<script>
+(()=>{
+"use strict";
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const SMALL = () => innerWidth<=760 || innerHeight<=520;
+
+/* ================= chapters / navigation ================= */
+const CH = [
+  {n:'I',  name:'The server', c:'var(--blue)'},
+  {n:'II', name:'Memory',     c:'var(--pink)'},
+  {n:'III',name:'Numbers',    c:'var(--yellow)'},
+  {n:'IV', name:'Scale',      c:'var(--purple)'},
+  {n:'V',  name:'Choosing',   c:'var(--green)'},
+  {n:'VI', name:'Build it',   c:'var(--ink)'},
+  {n:'VII',name:'Field notes',c:'var(--orange)'}
+];
+const slides = $$('.slide');
+const tabs = $('#tabs');
+$('#nPages').textContent = slides.length;
+CH.forEach((c,i)=>{
+  const b=document.createElement('button'); b.type='button';
+  b.style.setProperty('--c',c.c);
+  b.innerHTML=`<span class="rn">${c.n}</span><span class="nm">${c.name}</span>`;
+  b.setAttribute('aria-label',`Chapter ${c.n}: ${c.name}`);
+  b.addEventListener('click',e=>{e.stopPropagation(); go(slides.findIndex(s=>+s.dataset.ch===i));});
+  tabs.appendChild(b);
+});
+let cur = -1;
+function idxFromHash(){ const h=location.hash.slice(1).split('&')[0]; const i=slides.findIndex(s=>s.id===h); return i<0?0:i; }
+function go(i, fromHash){
+  i=Math.max(0,Math.min(slides.length-1,i)); if(i===cur) return;
+  const prev=slides[cur]; const dir = i>cur?1:-1;
+  slides.forEach((x,k)=>{ if(k!==i && x!==prev){ x.classList.remove('on','off'); x.setAttribute('aria-hidden','true'); x.inert=true; } });
+  if(prev){ prev.classList.remove('on'); prev.classList.add('off'); prev.setAttribute('aria-hidden','true'); prev.inert=true; }
+  const s=slides[i]; s.classList.remove('off'); s.classList.add('on'); s.removeAttribute('aria-hidden'); s.inert=false;
+  const pgEl=s.querySelector('.pg'); if(pgEl) pgEl.scrollTop=0;
+  cur=i;
+  const ch=+s.dataset.ch;
+  const inCh=slides.filter(x=>+x.dataset.ch===ch), pos=inCh.indexOf(s);
+  [...tabs.children].forEach((b,k)=>{b.classList.toggle('cur',k===ch); b.setAttribute('aria-current',k===ch?'true':'false'); if(k===ch) b.style.setProperty('--prog', inCh.length>1?pos/(inCh.length-1):0);});
+  $('#pg').textContent=String(i+1).padStart(2,'0');
+  $('#of').textContent='of '+slides.length;
+  $('#pgt').textContent=s.getAttribute('aria-label');
+  $('#rh').textContent=`${CH[ch].n} · ${CH[ch].name}`;
+  $('#prev').disabled=i===0; $('#next').disabled=i===slides.length-1;
+  document.querySelector('.runhead').style.visibility = i===0?'hidden':'visible';
+  document.body.classList.toggle('at-cover',i===0);
+  if(!fromHash) history.replaceState(null,'','#'+s.id);
+  if(prev) inkIn(s,dir);
+  onEnter(s);
+}
+/* page turn: each block is "pulled" as a fresh print, the two colour separations sliding into register */
+function inkIn(s,dir){
+  if(RM || !s.animate) return;
+  const els=[...s.querySelectorAll('h1,h2,h3,.lede,p,li,table,.code,.big,.eq,.slab,.seg,.ctl,.readout,svg,.path,.ptab,dl,.membar,canvas.strip')].filter(e=>!e.closest('.plate')&&!e.closest('li p')).slice(0,40);
+  els.forEach((e,k)=>{
+    const head=/^H[123]$/.test(e.tagName);
+    e.animate([
+      {opacity:0, transform:`translate(${dir*(head?26:12)}px,0)`, textShadow:'.14em 0 0 rgba(255,79,163,.7), -.12em 0 0 rgba(63,224,197,.7)'},
+      {opacity:1, offset:.55},
+      {opacity:1, transform:'translate(0,0)', textShadow:'0 0 0 rgba(255,79,163,0), 0 0 0 rgba(63,224,197,0)'}
+    ],{duration:head?640:520, delay:Math.min(k*24,440), easing:'cubic-bezier(.2,.75,.2,1)', fill:'backwards'});
+  });
+}
+function next(){go(cur+1)} function prevS(){go(cur-1)}
+$('#next').addEventListener('click',e=>{e.stopPropagation();next()});
+$('#prev').addEventListener('click',e=>{e.stopPropagation();prevS()});
+addEventListener('keydown',e=>{
+  if(e.metaKey||e.ctrlKey||e.altKey) return;
+  if(e.target.matches && e.target.matches('input,select,textarea')) { if(['ArrowLeft','ArrowRight','Home','End',' '].includes(e.key)) return; }
+  if(e.target.matches && e.target.matches('button') && e.key===' ') return;
+  if(['ArrowRight','PageDown'].includes(e.key) || (e.key===' ' && !e.shiftKey)){ e.preventDefault(); next(); }
+  else if(['ArrowLeft','PageUp'].includes(e.key) || (e.key===' ' && e.shiftKey)){ e.preventDefault(); prevS(); }
+  else if(e.key==='Home'){ e.preventDefault(); go(0);} else if(e.key==='End'){ e.preventDefault(); go(slides.length-1);}
+});
+addEventListener('hashchange',()=>go(idxFromHash(),true));
+const INTERACTIVE='a,button,input,select,label,textarea,pre,.code,.seg,.ctl,svg,table,.tabs,.folio,dl,.ptab,canvas.strip';
+let sx=0,sy=0,st0=0,moved=false,downPlate=null;
+const deck=$('#deck');
+deck.addEventListener('pointerdown',e=>{sx=e.clientX;sy=e.clientY;st0=performance.now();moved=false;downPlate=e.target.closest&&e.target.closest('.plate[data-pick]'); if(downPlate) pickAt(e,downPlate);},{passive:true});
+deck.addEventListener('pointermove',e=>{ if(Math.abs(e.clientX-sx)>10||Math.abs(e.clientY-sy)>10) moved=true; const pl=e.target.closest&&e.target.closest('.plate[data-pick]'); if(pl && (e.pointerType==='mouse'||e.buttons)) pickAt(e,pl); },{passive:true});
+deck.addEventListener('pointerup',e=>{
+  const dx=e.clientX-sx, dy=e.clientY-sy, quick=performance.now()-st0<450;
+  if(e.target.closest('input')) return;
+  if(Math.abs(dx)>50 && Math.abs(dx)>Math.abs(dy)*1.3 && (!downPlate||quick)){ dx<0?next():prevS(); return; }
+  if(moved||downPlate) return;
+  if(e.pointerType==='mouse' && e.button!==0) return;
+  if(e.target.closest(INTERACTIVE)) return;
+  if(getSelection && String(getSelection()).length) return;
+  (e.clientX > innerWidth*0.33) ? next() : prevS();
+});
+
+/* stacked tables on phones: label each cell with its column head */
+$$('table.stack').forEach(t=>{ const hs=[...t.querySelectorAll('thead th')].map(th=>th.childNodes[0]?th.childNodes[0].textContent.trim():''); t.querySelectorAll('tbody tr').forEach(tr=>{ [...tr.children].forEach((c,i)=>{ if(c.tagName==='TD') c.dataset.l=hs[i]||''; }); }); });
+/* copy buttons */
+$$('.copy').forEach(b=>b.addEventListener('click',async e=>{
+  e.stopPropagation();
+  const t=b.parentElement.querySelector('pre').innerText;
+  try{ await navigator.clipboard.writeText(t); b.textContent='copied'; b.classList.add('ok'); }
+  catch(_){ const r=document.createRange(); r.selectNodeContents(b.parentElement.querySelector('pre')); const s=getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent='selected'; }
+  setTimeout(()=>{b.textContent='copy';b.classList.remove('ok')},1600);
+}));
+
+/* ================= simulation config ================= */
+const NPG=6144, NRG=512, MAXP=96, NPART=8192, GMAX=16, GP=48, GH=GMAX*4, FL0=NRG*MAXP;
+const STEP={base:80,perSeq:1.5,perTok:.04,specCost:.12};   // illustrative step-time model, in ms
+const BASE={np:1536,nReq:128,rate:.6,maxSeqs:32,budget:2048,chunk:512,share:0,groups:8,specK:0,specAcc:.7,wFrac:.15,util:.9,speed:1,L:360,gMin:60,gMax:380,hero:0,thread:0,parts:1,warm:300};
+const SCENES={
+  cover:{np:6144,nReq:512,rate:2.4,maxSeqs:150,budget:4096,share:.6,groups:12,wFrac:.12,util:.9,L:420,warm:420, S:{np:2304,nReq:192,rate:1.2,maxSeqs:60}},
+  calm:{np:1536,nReq:128,rate:.6,maxSeqs:32,speed:.6,share:.4},
+  path:{np:768,nReq:64,rate:.7,maxSeqs:14,budget:256,chunk:96,L:300,gMin:80,gMax:240,wFrac:0,util:1,hero:1,thread:1,speed:.55,warm:200, S:{np:384,rate:.4,maxSeqs:8}},
+  batch:{np:2304,nReq:256,L:360,wFrac:0,util:1,hero:0, S:{np:1536}},
+  paged:{np:384,nReq:32,rate:.55,maxSeqs:9,budget:128,chunk:48,L:200,gMin:80,gMax:200,wFrac:0,util:1,hero:1,thread:1,speed:.42,warm:160, S:{np:216,rate:.3,maxSeqs:5}},
+  preempt:{np:1536,nReq:256,maxSeqs:48,budget:4096,chunk:512,L:200,gMin:30,gMax:150,wFrac:.2,hero:0},
+  prefix:{np:1024,nReq:96,rate:1.1,maxSeqs:24,share:.85,groups:7,L:480,gMin:40,gMax:200,budget:1024,wFrac:0,util:1,hero:0,warm:500, S:{np:640,rate:.7,maxSeqs:14}},
+  drive:{np:1536,nReq:256,groups:10,budget:2048,wFrac:0,util:1,hero:0,warm:400},
+  memory:{np:4096,nReq:384,rate:2.2,maxSeqs:160,L:420, S:{np:2304,nReq:192,rate:1.2,maxSeqs:80}},
+  spec:{np:768,nReq:32,maxSeqs:8,rate:.5,specK:7,speed:.5,L:520,gMin:200,gMax:500,wFrac:0,util:1,hero:1,thread:0,warm:200, S:{np:384}},
+  spark:{np:2304,nReq:64,maxSeqs:8,rate:.4,specK:7,specAcc:.72,speed:.6,L:640,gMin:200,gMax:500,wFrac:.2,util:.6,hero:1,thread:0,share:.5,groups:4, S:{np:1536}},
+  colophon:{np:2304,nReq:256,rate:1.6,maxSeqs:60,share:.6,groups:10,wFrac:.12,util:.9,L:400, S:{np:1536}}
+};
+const UI={ batch:{maxSeqs:48,budget:2048,rate:1.4}, preempt:{util:.34,rate:3}, memory:{wFrac:.2,util:.6}, spec:{specK:7,specAcc:.7}, drive:{rate:.8,maxSeqs:32,L:320,share:.5} };
+function cfgFor(s){
+  const name=s.dataset.scene||'calm';
+  const sc=SCENES[name]||{};
+  const c=Object.assign({},BASE,sc); delete c.S;
+  if(SMALL() && sc.S) Object.assign(c,sc.S);
+  if(UI[name]) Object.assign(c,UI[name]);
+  c.name=name;
+  c.full = s.dataset.plate==='full';
+  return c;
+}
+function derive(c,NP){
+  const wEnd=Math.round(c.wFrac*NP);
+  let kvEnd=Math.round(c.util*NP); kvEnd=Math.min(NP,Math.max(kvEnd,wEnd+Math.round(NP*.05)));
+  const kv=kvEnd-wEnd;
+  const pfxPages=Math.min(GP,Math.floor(.5*c.L/16));
+  return {wEnd,kvEnd,kv,pfxPages,pMin:Math.round(c.L*.6),pMax:Math.round(c.L*1.4),lowWater:Math.max(4,Math.min(Math.floor(kv*.2),Math.ceil(c.budget/16)+8))};
+}
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function buildFree(D){
+  const rng=mulberry(1234), arr=[]; for(let p=D.wEnd;p<D.kvEnd;p++) arr.push(p);
+  // shuffle in short runs so pages scatter, as in an allocator that has been running for a while
+  const runs=[]; for(let i=0;i<arr.length;i+=9) runs.push(arr.slice(i,i+9));
+  for(let i=runs.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); [runs[i],runs[j]]=[runs[j],runs[i]]; }
+  return runs.flat().reverse();
+}
+
+/* ================= WebGPU press ================= */
+const WGSL_SIM = /* wgsl */`
+const MAXP:u32=${MAXP}u; const GP:u32=${GP}u; const GH:u32=${GH}u; const GMAX:u32=${GMAX}u; const FL0:u32=${FL0}u;
+const EMPTY:u32=0u; const WAITING:u32=1u; const PREFILL:u32=2u; const DECODE:u32=3u; const DONE:u32=4u; const PREEMPT:u32=5u;
+struct P{nPages:u32,kvStart:u32,kvEnd:u32,nReq:u32,
+ rate:f32,maxSeqs:u32,budget:u32,chunk:u32,
+ share:f32,specK:u32,specAcc:f32,groups:u32,
+ pMin:u32,pMax:u32,gMin:u32,gMax:u32,
+ cols:u32,rows:u32,nPart:u32,pfxPages:u32,
+ pick:u32,pickSeq:u32,lowWater:u32,seed:u32,
+ base:f32,perSeq:f32,perTok:f32,specCost:f32};
+struct Req{state:u32,prompt:u32,gen:u32,pre:u32,done:u32,np:u32,pfx:u32,grp:u32,bornMs:u32,first:u32,born:u32,pad:u32};
+struct C{freeTop:atomic<i32>,running:atomic<u32>,budgetUsed:atomic<u32>,tokOut:atomic<u32>,
+ preTok:atomic<u32>,preempt:atomic<u32>,waiting:atomic<u32>,partHead:atomic<u32>,
+ finished:atomic<u32>,hits:atomic<u32>,decoding:atomic<u32>,queries:atomic<u32>,
+ tick:atomic<u32>,clock:atomic<u32>,ttftSum:atomic<u32>,ttftCnt:atomic<u32>,
+ empties:atomic<u32>,emptiesPrev:atomic<u32>,evict:atomic<u32>,follow:atomic<u32>,
+ pickSeq:atomic<u32>,stepPrev:atomic<u32>,p0:atomic<u32>,p1:atomic<u32>};
+@group(0) @binding(0) var<uniform> prm:P;
+@group(0) @binding(1) var<storage,read_write> reqs:array<Req>;
+@group(0) @binding(2) var<storage,read_write> ptab:array<u32>;      // block tables, then the free list at FL0
+@group(0) @binding(3) var<storage,read_write> pinfo:array<u32>;     // per page: owner | fill<<16
+@group(0) @binding(4) var<storage,read_write> heat:array<f32>;
+@group(0) @binding(5) var<storage,read_write> cnt:C;
+@group(0) @binding(6) var<storage,read_write> parts:array<vec4f>;
+@group(0) @binding(7) var<storage,read_write> stats:array<u32>;
+@group(0) @binding(8) var<storage,read_write> gb:array<atomic<u32>>; // prefix cache: [flag,refs,last,n] per entry, then its pages
+
+fn hsh(x:u32)->u32{ let v=x*747796405u+2891336453u; let w=((v>>((v>>28u)+4u))^v)*277803737u; return (w>>22u)^w; }
+fn rnd(a:u32,b:u32)->f32{ return f32(hsh(a^hsh(b+0x9e3779b9u)))*(1.0/4294967296.0); }
+fn pop()->i32{ let o=atomicSub(&cnt.freeTop,1); if(o>0){ return i32(ptab[FL0+u32(o-1)]); } return -1; }
+
+fn ensurePages(i:u32, r:ptr<function,Req>, tokens:u32)->bool{
+  let need=(tokens+15u)/16u;
+  loop{
+    if((*r).np>=need){break;}
+    if((*r).np>=MAXP){return false;}
+    let p=pop(); if(p<0){return false;}
+    ptab[i*MAXP+(*r).np]=u32(p); (*r).np=(*r).np+1u;
+  }
+  return true;
+}
+fn writeFill(i:u32,s:u32,np:u32,total:u32,k0:u32){
+  var k=max(k0,s);
+  loop{
+    if(k>=np){break;}
+    let p=ptab[i*MAXP+k];
+    let f=min(16u,total-min(total,k*16u));
+    pinfo[p]=(i+1u)|(f<<16u);
+    heat[p]=1.0;
+    k=k+1u;
+  }
+}
+fn spawn(i:u32,p:u32,n:u32,T:u32){
+  if(prm.nPart==0u){return;}
+  let cx=(f32(p%prm.cols)+0.5)/f32(prm.cols);
+  let cy=(f32(p/prm.cols)+0.5)/f32(prm.rows);
+  for(var j=0u;j<min(n,3u);j=j+1u){
+    let h=atomicAdd(&cnt.partHead,1u)%prm.nPart;
+    let r1=rnd(i*7u+j,T*11u+1u); let r2=rnd(i*13u+j,T*5u+2u);
+    parts[h*2u]=vec4f(cx,cy,0.10+r1*0.22,(r2-0.5)*0.10);
+    parts[h*2u+1u]=vec4f(1.3+r2*1.5,f32(i),r1,0.0);
+  }
+}
+
+// 1 · finished and preempted requests give their pages back; new requests arrive
+@compute @workgroup_size(64) fn retire(@builtin(global_invocation_id) id:vec3u){
+  let i=id.x; if(i>=prm.nReq){return;}
+  let T=atomicLoad(&cnt.tick); let now=atomicLoad(&cnt.clock);
+  var r=reqs[i];
+  if(r.first==1u){ atomicAdd(&cnt.ttftSum,now-r.bornMs); atomicAdd(&cnt.ttftCnt,1u); r.first=2u; }
+  if(r.state==DONE || r.state==PREEMPT){
+    var s=0u;
+    if(r.pfx>0u){ let g=r.pfx-1u; s=atomicLoad(&gb[g*4u+3u]); atomicSub(&gb[g*4u+1u],1u); atomicStore(&gb[g*4u+2u],T); }
+    for(var k=s;k<r.np;k=k+1u){
+      let p=ptab[i*MAXP+k];
+      let slot=atomicAdd(&cnt.freeTop,1);
+      ptab[FL0+u32(slot)]=p;
+      pinfo[p]=0u; heat[p]=-1.0;
+    }
+    r.np=0u; r.pfx=0u;
+    if(r.state==PREEMPT){
+      r.prompt=r.prompt+r.done; r.gen=r.gen-r.done; r.done=0u; r.pre=0u; r.state=WAITING;
+      atomicAdd(&cnt.preempt,1u);
+    } else { r.state=EMPTY; }
+  }
+  if(r.state==EMPTY){
+    let e=max(atomicLoad(&cnt.emptiesPrev),1u);
+    let lam=prm.rate*f32(atomicLoad(&cnt.stepPrev))*0.0001;
+    if(rnd(i+prm.seed,T*3u+1u)<lam/f32(e)){
+      let maxT=(MAXP-2u)*16u;
+      r.prompt=prm.pMin+u32(rnd(i,T*7u+3u)*f32(prm.pMax-prm.pMin));
+      r.gen=prm.gMin+u32(rnd(i,T*9u+4u)*f32(prm.gMax-prm.gMin));
+      if(r.prompt+r.gen>maxT){ r.prompt=min(r.prompt,maxT-32u); r.gen=max(16u,min(r.gen,maxT-r.prompt)); }
+      r.pfx=0u; r.np=0u; r.pre=0u; r.done=0u; r.born=T; r.bornMs=now; r.first=0u; r.grp=0u;
+      if(prm.groups>0u && rnd(i,T*5u+7u)<prm.share){
+        let z=rnd(i*31u,T*13u+11u);
+        r.grp=1u+min(prm.groups-1u,u32(z*z*f32(prm.groups)));   // a few prefixes are popular, the rest are rare
+      }
+      r.state=WAITING;
+    } else { atomicAdd(&cnt.empties,1u); }
+  }
+  if(r.state==WAITING){ atomicAdd(&cnt.waiting,1u); }
+  if(r.state==PREFILL || r.state==DECODE){ atomicAdd(&cnt.running,1u); }
+  reqs[i]=r;
+}
+
+// 2 · if free pages are short, drop the least recently used idle prefix from the cache
+@compute @workgroup_size(1) fn evict(){
+  var f=atomicLoad(&cnt.freeTop); if(f<0){ f=0; }
+  for(var n=0u;n<2u;n=n+1u){
+    if(u32(f)>=prm.lowWater){break;}
+    var best=0xffffffffu; var bl=0xffffffffu;
+    for(var g=0u;g<GMAX;g=g+1u){
+      if(atomicLoad(&gb[g*4u])==1u && atomicLoad(&gb[g*4u+1u])==0u){ let l=atomicLoad(&gb[g*4u+2u]); if(l<bl){bl=l;best=g;} }
+    }
+    if(best==0xffffffffu){break;}
+    let s=atomicLoad(&gb[best*4u+3u]);
+    for(var k=0u;k<s;k=k+1u){ let p=atomicLoad(&gb[GH+best*GP+k]); ptab[FL0+u32(f)]=p; f=f+1; pinfo[p]=0u; heat[p]=-1.0; }
+    atomicStore(&gb[best*4u],0u); atomicAdd(&cnt.evict,1u);
+  }
+  atomicStore(&cnt.freeTop,f);
+}
+@compute @workgroup_size(1) fn clampk(){
+  let f=atomicLoad(&cnt.freeTop); if(f<0){ atomicStore(&cnt.freeTop,0); }
+}
+
+// 3 · decodes go first: every running request appends its next token(s)
+@compute @workgroup_size(64) fn decode(@builtin(global_invocation_id) id:vec3u){
+  let i=id.x; if(i>=prm.nReq){return;}
+  var r=reqs[i]; if(r.state!=DECODE){return;}
+  let T=atomicLoad(&cnt.tick);
+  atomicAdd(&cnt.decoding,1u);
+  var n=1u;
+  if(prm.specK>0u){
+    var acc=0u;
+    loop{ if(acc>=prm.specK){break;} if(rnd(i*31u+acc,T*13u+5u)<prm.specAcc){acc=acc+1u;} else {break;} }
+    n=1u+acc;
+  }
+  n=min(n,r.gen-r.done);
+  let total=r.prompt+r.done+n;
+  let oldNp=r.np;
+  if(!ensurePages(i,&r,total)){ r.state=PREEMPT; reqs[i]=r; return; }
+  if(r.first==0u){ r.first=1u; }
+  r.done=r.done+n;
+  atomicAdd(&cnt.tokOut,n); atomicAdd(&cnt.budgetUsed,1u);
+  var s=0u; if(r.pfx>0u){ s=atomicLoad(&gb[(r.pfx-1u)*4u+3u]); }
+  writeFill(i,s,r.np,total,max(oldNp,1u)-1u);
+  spawn(i,ptab[i*MAXP+r.np-1u],n,T);
+  if(r.done>=r.gen){ r.state=DONE; atomicAdd(&cnt.finished,1u); }
+  reqs[i]=r;
+}
+
+// 4 · what is left of the token budget goes to prefill chunks; waiting requests are admitted up to max-num-seqs
+@compute @workgroup_size(64) fn prefill(@builtin(global_invocation_id) id:vec3u){
+  let i=id.x; if(i>=prm.nReq){return;}
+  var r=reqs[i];
+  let T=atomicLoad(&cnt.tick);
+  if(r.state==WAITING){
+    let o=atomicAdd(&cnt.running,1u);
+    if(o>=prm.maxSeqs){ atomicSub(&cnt.running,1u); return; }
+    r.state=PREFILL; r.pre=0u; r.np=0u; r.pfx=0u;
+    atomicAdd(&cnt.queries,r.prompt);
+    if(r.grp>0u){                                   // prefix-cache lookup at schedule time
+      let g=r.grp-1u;
+      if(atomicLoad(&gb[g*4u])==1u){
+        let s=atomicLoad(&gb[g*4u+3u]);
+        if(s*16u+16u<=r.prompt){
+          atomicAdd(&gb[g*4u+1u],1u); atomicStore(&gb[g*4u+2u],T);
+          for(var k=0u;k<s;k=k+1u){ let p=atomicLoad(&gb[GH+g*GP+k]); ptab[i*MAXP+k]=p; heat[p]=1.0; }
+          r.pfx=r.grp; r.np=s; r.pre=s*16u; atomicAdd(&cnt.hits,s*16u);
+        }
+      }
+    }
+  }
+  if(r.state!=PREFILL){ return; }
+  let rem=r.prompt-min(r.pre,r.prompt);
+  let want=min(rem,prm.chunk);
+  let o=atomicAdd(&cnt.budgetUsed,want);
+  var take=0u; if(o<prm.budget){ take=min(want,prm.budget-o); }
+  var s=0u; if(r.pfx>0u){ s=atomicLoad(&gb[(r.pfx-1u)*4u+3u]); }
+  if(take>0u){
+    let oldNp=r.np;
+    let ok=ensurePages(i,&r,r.pre+take);
+    let cap=r.np*16u;
+    let newPre=min(r.pre+take,cap);
+    let got=newPre-min(r.pre,newPre);
+    r.pre=newPre; atomicAdd(&cnt.preTok,got);
+    if(r.np>0u){ writeFill(i,s,r.np,r.pre,max(oldNp,1u)-1u); }
+    if(!ok && got==0u && rnd(i,T*17u+9u)<0.05){ r.state=PREEMPT; reqs[i]=r; return; }
+  }
+  if(r.pre>=r.prompt){
+    r.state=DECODE;
+    if(r.grp>0u && r.pfx==0u && prm.pfxPages>0u){   // first to compute this prefix: its full blocks become the cache entry
+      let g=r.grp-1u; let sp=prm.pfxPages;
+      if(sp<=r.np && sp*16u+16u<=r.prompt){
+        let x=atomicCompareExchangeWeak(&gb[g*4u],0u,2u);
+        if(x.exchanged){
+          for(var k=0u;k<sp;k=k+1u){ let p=ptab[i*MAXP+k]; atomicStore(&gb[GH+g*GP+k],p); pinfo[p]=(0xFF00u+g)|(16u<<16u); }
+          atomicStore(&gb[g*4u+3u],sp); atomicStore(&gb[g*4u+1u],1u); atomicStore(&gb[g*4u+2u],T); atomicStore(&gb[g*4u],1u);
+          r.pfx=r.grp;
+        }
+      }
+    }
+  }
+  reqs[i]=r;
+}
+
+// 5 · advance the simulated clock by this step's cost and publish the numbers
+@compute @workgroup_size(1) fn finalize(){
+  let T=atomicLoad(&cnt.tick);
+  var f=atomicLoad(&cnt.freeTop); if(f<0){ f=0; atomicStore(&cnt.freeTop,0); }
+  let dec=atomicLoad(&cnt.decoding); let to=atomicLoad(&cnt.tokOut); let pt=atomicLoad(&cnt.preTok);
+  var ms=prm.base;
+  if(dec>0u || pt>0u){ ms=prm.base*(1.0+select(0.0,prm.specCost,prm.specK>0u))+prm.perSeq*f32(dec)+prm.perTok*f32(pt); }
+  let st=u32(ms*10.0);
+  let clk=atomicLoad(&cnt.clock)+st; atomicStore(&cnt.clock,clk); atomicStore(&cnt.stepPrev,st);
+  stats[0]=u32(f); stats[1]=atomicLoad(&cnt.running); stats[2]=atomicLoad(&cnt.waiting); stats[3]=dec;
+  stats[4]=stats[4]+to; stats[5]=stats[5]+pt; stats[6]=stats[6]+atomicLoad(&cnt.preempt);
+  stats[7]=stats[7]+atomicLoad(&cnt.finished); stats[8]=stats[8]+atomicLoad(&cnt.hits); stats[9]=stats[9]+atomicLoad(&cnt.queries);
+  stats[10]=T; stats[11]=clk; stats[12]=stats[12]+st*dec; stats[13]=atomicLoad(&cnt.ttftSum); stats[14]=atomicLoad(&cnt.ttftCnt); stats[15]=atomicLoad(&cnt.evict);
+  var cg=0u; var cp=0u;
+  for(var g=0u;g<GMAX;g=g+1u){ if(atomicLoad(&gb[g*4u])==1u){ cg=cg+1u; cp=cp+atomicLoad(&gb[g*4u+3u]); } }
+  stats[16]=cg; stats[17]=cp; stats[18]=st;
+  var fo=atomicLoad(&cnt.follow);
+  if(prm.pickSeq!=atomicLoad(&cnt.pickSeq)){
+    atomicStore(&cnt.pickSeq,prm.pickSeq);
+    if(prm.pick<prm.nPages){ let o=pinfo[prm.pick]&0xffffu; if(o>=1u && o<=prm.nReq){ fo=o-1u; } }
+  }
+  var need=fo>=prm.nReq;
+  if(!need){ need=reqs[fo].state==EMPTY; }
+  if(need){
+    var cand=0xffffffffu; var rank=0u;
+    for(var i=0u;i<prm.nReq;i=i+1u){
+      let s=reqs[i].state; var rk=0u;
+      if(s==WAITING){rk=3u;} else if(s==PREFILL){rk=2u;} else if(s==DECODE){rk=1u;}
+      if(rk>rank){ rank=rk; cand=i; if(rk==3u){break;} }
+    }
+    fo=cand;
+  }
+  atomicStore(&cnt.follow,fo); stats[19]=fo;
+  if(fo<prm.nReq){
+    let h=reqs[fo];
+    stats[20]=h.state; stats[21]=h.prompt; stats[22]=h.gen; stats[23]=h.pre; stats[24]=h.done; stats[25]=h.np; stats[26]=h.pfx; stats[27]=h.grp; stats[28]=h.bornMs; stats[29]=h.first; stats[30]=h.born;
+    var sh=0u; if(h.pfx>0u){ sh=atomicLoad(&gb[(h.pfx-1u)*4u+3u]); } stats[31]=sh;
+    for(var k=0u;k<MAXP;k=k+1u){ stats[160u+k]=select(0xffffffffu,ptab[fo*MAXP+k],k<h.np); }
+  } else { stats[20]=0u; stats[25]=0u; stats[31]=0u; }
+  let slot=32u+2u*(T%64u); stats[slot]=to; stats[slot+1u]=pt;
+  atomicStore(&cnt.running,0u); atomicStore(&cnt.budgetUsed,0u); atomicStore(&cnt.tokOut,0u); atomicStore(&cnt.preTok,0u);
+  atomicStore(&cnt.preempt,0u); atomicStore(&cnt.waiting,0u); atomicStore(&cnt.finished,0u); atomicStore(&cnt.hits,0u);
+  atomicStore(&cnt.decoding,0u); atomicStore(&cnt.queries,0u);
+  atomicStore(&cnt.emptiesPrev,atomicLoad(&cnt.empties)); atomicStore(&cnt.empties,0u);
+  atomicStore(&cnt.tick,T+1u);
+}
+
+@compute @workgroup_size(64) fn pages(@builtin(global_invocation_id) id:vec3u){
+  let p=id.x; if(p>=prm.nPages){return;}
+  let h=heat[p]*0.88; heat[p]=select(h,0.0,abs(h)<0.01);
+}
+@compute @workgroup_size(64) fn particles(@builtin(global_invocation_id) id:vec3u){
+  let i=id.x; if(i>=prm.nPart){return;}
+  var b=parts[i*2u+1u]; if(b.x<=0.0){return;}
+  var a=parts[i*2u];
+  let dt=1.0/24.0;
+  a.x=a.x+a.z*dt; a.y=a.y+a.w*dt;
+  a.z=a.z*1.012+0.002; a.w=a.w*0.985+sin(a.x*11.0+b.z*40.0)*0.004;
+  b.x=b.x-dt;
+  parts[i*2u]=a; parts[i*2u+1u]=b;
+}
+`;
+
+const WGSL_DRAW = /* wgsl */`
+struct R{res:vec2f,time:f32,ghost:f32,grid:vec4f,cols:f32,rows:f32,nPages:f32,wEnd:f32,kvEnd:f32,dpr:f32,hero:f32,big:f32,plate:vec4f};
+@group(0) @binding(0) var<uniform> u:R;
+@group(0) @binding(1) var<storage,read> pinfo:array<u32>;
+@group(0) @binding(2) var<storage,read> heat:array<f32>;
+@group(0) @binding(3) var<storage,read> parts:array<vec4f>;
+@group(0) @binding(4) var<storage,read> stats:array<u32>;
+@group(0) @binding(5) var<storage,read> gb:array<u32>;
+
+const PAPER=vec3f(0.110,0.078,0.141);
+const BLUE=vec3f(0.247,0.878,0.773);
+const PINK=vec3f(1.0,0.31,0.639);
+const YEL=vec3f(0.831,0.961,0.235);
+const BLK=vec3f(0.945,0.914,0.969);
+const LIL=vec3f(0.647,0.545,1.0);
+
+fn hsh(x:u32)->u32{ let v=x*747796405u+2891336453u; let w=((v>>((v>>28u)+4u))^v)*277803737u; return (w>>22u)^w; }
+fn h2(p:vec2f)->f32{ return fract(sin(dot(p,vec2f(127.1,311.7)))*43758.5453); }
+
+@vertex fn vfull(@builtin(vertex_index) i:u32)->@builtin(position) vec4f{
+  var p=array<vec2f,3>(vec2f(-1.0,-1.0),vec2f(3.0,-1.0),vec2f(-1.0,3.0));
+  return vec4f(p[i],0.0,1.0);
+}
+
+// ink tone per separation (aqua, pink, lime, pearl) at a pixel. In "big" mode a page shows its 16 token slots as dots.
+fn tones(pp:vec2f)->vec4f{
+  let g=u.grid; let q=pp-g.xy;
+  if(q.x<0.0||q.y<0.0||q.x>=g.z||q.y>=g.w){ return vec4f(0.0); }
+  let cs=g.z/u.cols;
+  let c=floor(q/cs);
+  let fi=c.y*u.cols+c.x;
+  if(fi>=u.nPages){ return vec4f(0.0); }
+  let idx=u32(fi);
+  let l=(q-c*cs)/cs;
+  let big=u.big>0.5;
+  if(fi<u.wEnd){ return vec4f(0.0); }
+  if(fi>=u.kvEnd){
+    let s=fract((pp.x+pp.y)/(7.0*u.dpr));
+    return vec4f(0.0,0.0,0.0,select(0.0,select(0.16,0.3,big),s<0.16));
+  }
+  let gap=clamp(1.2*u.dpr/cs,0.05,0.3);
+  if(l.x>1.0-gap || l.y>1.0-gap){ return vec4f(0.0); }
+  let ll=l/(1.0-gap);
+  let info=pinfo[idx]; let own=info&0xffffu; let nf=(info>>16u)&31u;
+  let ht=heat[idx];
+  // shape masks
+  var on=0.0; var off=0.0;
+  if(big){
+    let sub=fract(ll*4.0)-0.5; let d=length(sub);
+    let j=u32(floor(ll.y*4.0))*4u+u32(floor(ll.x*4.0));
+    let aa=1.1*u.dpr/(cs*(1.0-gap)*0.25);
+    let dot=1.0-smoothstep(0.37-aa,0.37+aa,d);
+    let ring=dot*smoothstep(0.2-aa,0.2+aa,d);
+    if(j<nf){ on=dot; } else { off=ring; }
+  } else {
+    let filled=(1.0-ll.y)<=f32(nf)/16.0+0.001;
+    if(filled){ on=0.9; } else { off=0.18; }
+  }
+  if(own==0u){
+    if(ht< -0.05){ return vec4f(0.0,-ht*select(0.9,0.75,big),0.0,0.0); }
+    let dc=length((ll-0.5)*cs);
+    let r0=select(0.85,1.25,big)*u.dpr;
+    return vec4f(0.0,0.0,0.0,select(0.32,0.42,big)*(1.0-smoothstep(r0-0.5*u.dpr,r0+0.5*u.dpr,dc)));
+  }
+  if(own>=0xFF00u){                                   // a page of a cached prefix
+    let gi=own-0xFF00u; let used=gb[gi*4u+1u]>0u;
+    var y=0.0;
+    if(big){ let sub=fract(ll*4.0)-0.5; let d=length(sub); let aa=1.1*u.dpr/(cs*(1.0-gap)*0.25);
+      let dot=1.0-smoothstep(0.37-aa,0.37+aa,d); y=select(dot*smoothstep(0.2-aa,0.2+aa,d)*0.9,dot,used); }
+    else { y=select(0.3,0.95,used); }
+    let fl=clamp(ht,0.0,1.0);
+    return vec4f(0.0,fl*select(0.8,0.55,big)*select(1.0,y,big),y,fl*0.25);
+  }
+  let k=own-1u;
+  var t=vec4f(0.0);
+  let v=on+off*0.9;
+  if(k==stats[19] && u.hero>0.5){ t=vec4f(0.0,0.0,0.0,on+off); }
+  else {
+    let m=hsh(k)%5u;
+    if(m==0u){ t=vec4f(0.0,v,0.0,0.0); }
+    else if(m==1u){ t=vec4f(v,0.0,0.0,0.0); }
+    else if(m==2u){ t=vec4f(0.0,v,0.0,v*0.45); }
+    else if(m==3u){ t=vec4f(v,0.0,v*0.45,0.0); }
+    else { t=vec4f(v,0.0,0.0,v*0.5); }
+    if(u.hero>0.5){ t=t*0.62; }
+  }
+  t.w=t.w+max(ht,0.0)*select(0.45,0.3,big)*select(0.0,1.0,on>0.0||big);
+  return t;
+}
+fn scr(pp:vec2f,ang:f32,per:f32,tone:f32)->f32{
+  if(tone<=0.002){ return 0.0; }
+  if(tone>=0.985){ return 1.0; }
+  let c=cos(ang); let s=sin(ang);
+  let q=vec2f(c*pp.x-s*pp.y,s*pp.x+c*pp.y)/per;
+  let f=fract(q)-0.5; let d=length(f);
+  let r=sqrt(tone)*0.72; let aa=0.8/per;
+  return 1.0-smoothstep(r-aa,r+aa,d);
+}
+fn seg(p:vec2f,a:vec2f,b:vec2f)->f32{ let pa=p-a; let ba=b-a; let h=clamp(dot(pa,ba)/dot(ba,ba),0.0,1.0); return length(pa-ba*h); }
+
+@fragment fn fmain(@builtin(position) fp:vec4f)->@location(0) vec4f{
+  let pp=fp.xy;
+  var col=PAPER;
+  let n=h2(floor(pp/u.dpr))-0.5;
+  let n2=h2(floor(pp/(u.dpr*23.0)))-0.5;
+  col=col+vec3f(n*0.016+n2*0.010);
+  let cs=u.grid.z/max(u.cols,1.0);
+  let per=clamp(cs*0.36,2.3*u.dpr,4.6*u.dpr);
+  let d=u.dpr; let big=u.big>0.5;
+  // the four separations are sampled slightly out of register, as on a real press
+  var tb=tones(pp).x;
+  var tp=tones(pp+vec2f(1.2,0.6)*d).y;
+  var ty=tones(pp+vec2f(-0.7,1.1)*d).z;
+  var tk=tones(pp+vec2f(0.35,-0.45)*d).w;
+  if(!big){ tb=scr(pp,0.2618,per,tb); tp=scr(pp,1.309,per,tp); ty=scr(pp,0.0,per,ty); tk=scr(pp,0.7854,per,tk); }
+  var c2=col;
+  c2=mix(c2,BLUE,tb*0.95);
+  c2=mix(c2,PINK,tp*0.95);
+  c2=mix(c2,YEL,ty*0.95);
+  c2=mix(c2,BLK,tk*0.95);
+  let gw=u.grid; let qq=pp-gw.xy;
+  if(qq.x>=0.0 && qq.y>=0.0 && qq.x<gw.z && qq.y<gw.w){
+    let cc=floor(qq/(gw.z/u.cols)); let fi2=cc.y*u.cols+cc.x;
+    if(fi2<u.wEnd){ c2=mix(PAPER,LIL,0.25+0.6*scr(pp,0.5,clamp(per,2.6*d,4.0*d),0.55)); }
+  }
+  col=mix(col,c2,clamp(u.ghost*1.34,0.0,1.0));
+  if(u.plate.z>1.0 && u.ghost>0.5){
+    let P=u.plate; let L=16.0*d; let G=7.0*d; var m=1e9;
+    for(var cx=0;cx<2;cx=cx+1){
+      for(var cy=0;cy<2;cy=cy+1){
+        let x=P.x+f32(cx)*P.z; let y=P.y+f32(cy)*P.w;
+        let sx=select(-1.0,1.0,cx==1); let sy=select(-1.0,1.0,cy==1);
+        m=min(m,seg(pp,vec2f(x+sx*G,y),vec2f(x+sx*(G+L),y)));
+        m=min(m,seg(pp,vec2f(x,y+sy*G),vec2f(x,y+sy*(G+L))));
+      }
+    }
+    let a=1.0-smoothstep(0.35*d,0.95*d,m);
+    col=mix(col,BLK,a*0.85);
+  }
+  return vec4f(col,1.0);
+}
+
+struct VO{@builtin(position) pos:vec4f,@location(0) uv:vec2f,@location(1) col:vec3f,@location(2) a:f32};
+@vertex fn vpart(@builtin(vertex_index) vi:u32,@builtin(instance_index) ii:u32)->VO{
+  var o:VO;
+  var cs=array<vec2f,6>(vec2f(-1.0,-1.0),vec2f(1.0,-1.0),vec2f(-1.0,1.0),vec2f(-1.0,1.0),vec2f(1.0,-1.0),vec2f(1.0,1.0));
+  let c=cs[vi];
+  let a=parts[ii*2u]; let b=parts[ii*2u+1u];
+  o.uv=c; o.col=vec3f(1.0); o.a=0.0;
+  if(b.x<=0.0){ o.pos=vec4f(3.0,3.0,0.0,1.0); return o; }
+  let px=u.grid.xy+a.xy*u.grid.zw;
+  let cell=u.grid.z/max(u.cols,1.0);
+  let sz=clamp(cell*0.1,(1.2+b.z*0.9)*u.dpr,(2.6+b.z*1.6)*u.dpr);
+  let p=px+c*sz;
+  o.pos=vec4f(p.x/u.res.x*2.0-1.0,1.0-p.y/u.res.y*2.0,0.0,1.0);
+  let k=u32(b.y);
+  let m=hsh(k)%5u;
+  var col=PINK;
+  if(m==1u){col=BLUE;} else if(m==2u){col=mix(PINK,BLK,0.45);} else if(m==3u){col=mix(BLUE,YEL,0.45);} else if(m==4u){col=mix(BLUE,BLK,0.5);}
+  if(k==stats[19] && u.hero>0.5){ col=BLK; }
+  o.col=col;
+  o.a=clamp(b.x,0.0,1.0)*smoothstep(0.8,0.97,u.ghost)*0.9;
+  return o;
+}
+@fragment fn fpart(i:VO)->@location(0) vec4f{
+  let d=length(i.uv); let m=1.0-smoothstep(0.6,1.0,d); let a=m*i.a;
+  return vec4f(i.col*a,a);
+}
+`;
+
+const engine = { kind:null, sim:null, stats:new Uint32Array(256), statsT:0, hist:[], m:{} };
+let view = { rect:[0,0,0,0], target:[0,0,0,0], plate:[0,0,0,0], plateT:[0,0,0,0], ghost:0, ghostT:1, cols:96, rows:64, snap:true, big:0 };
+let cfg = Object.assign({},BASE,{name:'calm'});
+let pick={page:0xffffffff,seq:0};
+let DPR=1;
+
+async function initGPU(){
+  if(!('gpu' in navigator)) throw new Error('no navigator.gpu');
+  const adapter=await navigator.gpu.requestAdapter({powerPreference:'high-performance'});
+  if(!adapter) throw new Error('no adapter');
+  if(adapter.limits.maxStorageBuffersPerShaderStage<8) throw new Error('too few storage buffers');
+  const device=await adapter.requestDevice();
+  const canvas=$('#gpu');
+  const ctx=canvas.getContext('webgpu');
+  if(!ctx) throw new Error('no webgpu context');
+  const format=navigator.gpu.getPreferredCanvasFormat();
+  ctx.configure({device,format,alphaMode:'opaque'});
+  const errs=[];
+  device.addEventListener('uncapturederror',e=>{ errs.push(e.error.message); console.error('WebGPU:',e.error.message); });
+  const S=GPUBufferUsage.STORAGE, CD=GPUBufferUsage.COPY_DST, CS=GPUBufferUsage.COPY_SRC, U=GPUBufferUsage.UNIFORM;
+  const mk=(size,usage)=>device.createBuffer({size,usage});
+  const B={
+    prm:mk(128,U|CD), reqs:mk(NRG*48,S|CD), ptab:mk((FL0+NPG)*4,S|CD), pinfo:mk(NPG*4,S|CD), heat:mk(NPG*4,S|CD),
+    cnt:mk(96,S|CD), parts:mk(NPART*32,S|CD), stats:mk(1024,S|CD|CS), gb:mk((GH+GMAX*GP)*4,S|CD), read:mk(1024,GPUBufferUsage.MAP_READ|CD), ru:mk(80,U|CD)
+  };
+  const simMod=device.createShaderModule({code:WGSL_SIM});
+  const drawMod=device.createShaderModule({code:WGSL_DRAW});
+  for(const [nm,m] of [['sim',simMod],['draw',drawMod]]){
+    const info=await m.getCompilationInfo();
+    const bad=info.messages.filter(x=>x.type==='error');
+    if(bad.length) throw new Error(nm+' WGSL: '+bad.map(b=>`${b.lineNum}:${b.linePos} ${b.message}`).join(' | '));
+  }
+  const st=(b)=>({binding:b,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}});
+  const simBGL=device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}},st(1),st(2),st(3),st(4),st(5),st(6),st(7),st(8)]});
+  const simPL=device.createPipelineLayout({bindGroupLayouts:[simBGL]});
+  const names=['retire','evict','clampk','decode','prefill','finalize','pages','particles'];
+  const pipes=await Promise.all(names.map(e=>device.createComputePipelineAsync({layout:simPL,compute:{module:simMod,entryPoint:e}})));
+  const P=Object.fromEntries(names.map((n,i)=>[n,pipes[i]]));
+  const simBG=device.createBindGroup({layout:simBGL,entries:[B.prm,B.reqs,B.ptab,B.pinfo,B.heat,B.cnt,B.parts,B.stats,B.gb].map((b,i)=>({binding:i,resource:{buffer:b}}))});
+  const ro=(b,v)=>({binding:b,visibility:v,buffer:{type:'read-only-storage'}});
+  const FR=GPUShaderStage.FRAGMENT, VX=GPUShaderStage.VERTEX;
+  const drawBGL=device.createBindGroupLayout({entries:[{binding:0,visibility:VX|FR,buffer:{type:'uniform'}},ro(1,FR),ro(2,FR),ro(3,VX),ro(4,VX|FR),ro(5,FR)]});
+  const drawPL=device.createPipelineLayout({bindGroupLayouts:[drawBGL]});
+  const [bg,pp]=await Promise.all([
+    device.createRenderPipelineAsync({layout:drawPL,vertex:{module:drawMod,entryPoint:'vfull'},fragment:{module:drawMod,entryPoint:'fmain',targets:[{format}]},primitive:{topology:'triangle-list'}}),
+    device.createRenderPipelineAsync({layout:drawPL,vertex:{module:drawMod,entryPoint:'vpart'},fragment:{module:drawMod,entryPoint:'fpart',targets:[{format,blend:{color:{srcFactor:'one',dstFactor:'one-minus-src-alpha',operation:'add'},alpha:{srcFactor:'zero',dstFactor:'one',operation:'add'}}}]},primitive:{topology:'triangle-list'}})]);
+  const drawBG=device.createBindGroup({layout:drawBGL,entries:[B.ru,B.pinfo,B.heat,B.parts,B.stats,B.gb].map((b,i)=>({binding:i,resource:{buffer:b}}))});
+
+  let D=derive(cfg,cfg.np), NP=cfg.np, NR=cfg.nReq, mapping=false, frameN=0, lost=false, warm=0, seed=1;
+  device.lost.then(info=>{ lost=true; console.warn('device lost',info.message); if(info.reason!=='destroyed') fallback('GPU device lost'); });
+
+  function reset(c){
+    NP=Math.min(NPG,c.np); NR=Math.min(NRG,c.nReq); D=derive(c,NP); seed++;
+    const free=buildFree(D);
+    const pt=new Uint32Array(FL0+NPG); pt.set(free,FL0);
+    device.queue.writeBuffer(B.ptab,0,pt);
+    device.queue.writeBuffer(B.pinfo,0,new Uint32Array(NPG));
+    device.queue.writeBuffer(B.heat,0,new Float32Array(NPG));
+    device.queue.writeBuffer(B.reqs,0,new Uint32Array(NRG*12));
+    const cn=new Int32Array(24); cn[0]=free.length; cn[17]=NR; cn[19]=-1; cn[21]=Math.round(STEP.base*10); device.queue.writeBuffer(B.cnt,0,cn);
+    device.queue.writeBuffer(B.parts,0,new Float32Array(NPART*8));
+    device.queue.writeBuffer(B.stats,0,new Uint32Array(256));
+    device.queue.writeBuffer(B.gb,0,new Uint32Array(GH+GMAX*GP));
+    warm=RM?Math.min(c.warm,300):c.warm;
+  }
+  function writePrm(c){
+    D=derive(c,NP);
+    const ab=new ArrayBuffer(128), dv=new DataView(ab); let o=0;
+    const u=v=>{dv.setUint32(o,v>>>0,true);o+=4}, f=v=>{dv.setFloat32(o,v,true);o+=4};
+    u(NP);u(D.wEnd);u(D.kvEnd);u(NR);
+    f(c.rate);u(c.maxSeqs);u(c.budget);u(c.chunk);
+    f(c.share);u(c.specK);f(c.specAcc);u(Math.min(GMAX,c.groups));
+    u(D.pMin);u(D.pMax);u(c.gMin);u(c.gMax);
+    u(view.cols);u(view.rows);u(RM||!c.parts?0:NPART);u(D.pfxPages);
+    u(pick.page);u(pick.seq);u(D.lowWater);u(seed*7919);
+    f(STEP.base);f(STEP.perSeq);f(STEP.perTok);f(STEP.specCost);
+    device.queue.writeBuffer(B.prm,0,ab);
+  }
+  reset(cfg); writePrm(cfg);
+
+  return {
+    kind:'gpu', get NP(){return NP}, get D(){return D},
+    apply(c,needReset){ if(needReset) reset(c); writePrm(c); },
+    frame(ticks){
+      if(lost) return;
+      if(warm>0){ ticks=warm; warm=0; }
+      const W=canvas.width,H=canvas.height;
+      const ru=new Float32Array(20);
+      ru.set([W,H,performance.now()/1000,view.ghost, ...view.rect, view.cols,view.rows,NP,D.wEnd, D.kvEnd,DPR,cfg.hero?1:0,view.big, ...view.plate]);
+      device.queue.writeBuffer(B.ru,0,ru);
+      const enc=device.createCommandEncoder();
+      if(ticks>0){
+        const c=enc.beginComputePass(); c.setBindGroup(0,simBG);
+        const wr=Math.ceil(NR/64), wp=Math.ceil(NP/64), wq=Math.ceil(NPART/64);
+        for(let t=0;t<ticks;t++){
+          c.setPipeline(P.retire);c.dispatchWorkgroups(wr);
+          c.setPipeline(P.evict);c.dispatchWorkgroups(1);
+          c.setPipeline(P.decode);c.dispatchWorkgroups(wr);
+          c.setPipeline(P.clampk);c.dispatchWorkgroups(1);
+          c.setPipeline(P.prefill);c.dispatchWorkgroups(wr);
+          c.setPipeline(P.finalize);c.dispatchWorkgroups(1);
+          c.setPipeline(P.pages);c.dispatchWorkgroups(wp);
+          if(!RM && cfg.parts){ c.setPipeline(P.particles);c.dispatchWorkgroups(wq); }
+        }
+        c.end();
+      }
+      const tex=ctx.getCurrentTexture();
+      const rp=enc.beginRenderPass({colorAttachments:[{view:tex.createView(),loadOp:'clear',storeOp:'store',clearValue:{r:.110,g:.078,b:.141,a:1}}]});
+      rp.setBindGroup(0,drawBG);
+      rp.setPipeline(bg); rp.draw(3);
+      if(!RM && cfg.parts){ rp.setPipeline(pp); rp.draw(6,NPART); }
+      rp.end();
+      frameN++;
+      const doRead = !mapping && (frameN%6===0 || frameN<3);
+      if(doRead) enc.copyBufferToBuffer(B.stats,0,B.read,0,1024);
+      device.queue.submit([enc.finish()]);
+      if(frameN===1) device.queue.onSubmittedWorkDone().then(markLive);
+      if(doRead){
+        mapping=true;
+        B.read.mapAsync(GPUMapMode.READ).then(()=>{ engine.stats=new Uint32Array(B.read.getMappedRange().slice(0)); B.read.unmap(); mapping=false; engine.statsT=performance.now(); onStats(); }).catch(()=>{mapping=false});
+      }
+    },
+    errs
+  };
+}
+
+/* ================= the understudy: the same scheduler on the CPU, printed with Canvas 2D ================= */
+function initCPU(){
+  const CNP=2304, CNR=192, NPT=700;
+  const canvas=$('#cpu'); canvas.style.display='block'; $('#gpu').style.display='none';
+  const g=canvas.getContext('2d');
+  const F=12; // fields per request
+  const R=new Uint32Array(CNR*F), PT=new Uint32Array(CNR*MAXP), PI=new Uint32Array(CNP), HE=new Float32Array(CNP), FL=new Uint32Array(CNP);
+  const GB=new Uint32Array(GH+GMAX*GP), ST=new Uint32Array(256), PA=new Float32Array(NPT*8);
+  let top=0,T=0,clock=0,stepPrev=STEP.base*10,emptiesPrev=CNR,follow=-1,pickSeq=0,ttftSum=0,ttftCnt=0,evicts=0,ph=0,seed=1;
+  let c=cfg, NP=Math.min(CNP,c.np), NR=Math.min(CNR,c.nReq), D=derive(c,NP), warm=0;
+  const hsh=x=>{ let v=(Math.imul(x>>>0,747796405)+2891336453)>>>0; let w=Math.imul(((v>>>((v>>>28)+4))^v)>>>0,277803737)>>>0; return ((w>>>22)^w)>>>0; };
+  const rnd=(a,b)=>hsh((a^hsh((b+0x9e3779b9)>>>0))>>>0)/4294967296;
+  // the CPU press runs fewer pages, so scale the load that scenes ask for to the pages it has
+  const k=()=>Math.min(1,NP/Math.max(1,c.np));
+  function reset(cc){ c=cc; NP=Math.min(CNP,c.np); NR=Math.min(CNR,c.nReq); D=derive(c,NP); seed++;
+    const fr=buildFree(D); FL.set(fr); top=fr.length; PI.fill(0); HE.fill(0); R.fill(0); PA.fill(0); ST.fill(0); GB.fill(0);
+    T=0; clock=0; stepPrev=STEP.base*10; emptiesPrev=NR; follow=-1; ttftSum=0; ttftCnt=0; evicts=0; warm=Math.min(c.warm,300); }
+  function ensure(i,r,tokens){ const need=Math.ceil(tokens/16); while(r[5]<need){ if(r[5]>=MAXP||top<=0) return false; PT[i*MAXP+r[5]]=FL[--top]; r[5]++; } return true; }
+  function fillW(i,s,np,total,from){ for(let q=Math.max(from,s);q<np;q++){ const p=PT[i*MAXP+q]; const f=Math.min(16,Math.max(0,total-q*16)); PI[p]=(i+1)|(f<<16); HE[p]=1; } }
+  function spawn(i,p,n){ if(RM||!c.parts) return; for(let j=0;j<Math.min(n,2);j++){ const h=(ph++)%NPT; const r1=rnd(i*7+j,T*11+1), r2=rnd(i*13+j,T*5+2);
+      PA.set([((p%view.cols)+.5)/view.cols,(Math.floor(p/view.cols)+.5)/view.rows,.1+r1*.22,(r2-.5)*.1, 1.3+r2*1.4,i,r1,0],h*8); } }
+  function tick(){
+    const kk=k(), maxSeqs=Math.max(1,Math.round(c.maxSeqs*kk)), budget=Math.max(64,Math.round(c.budget*kk)), rate=c.rate*kk, groups=Math.min(GMAX,c.groups);
+    let running=0,waiting=0,tok=0,pre=0,preempt=0,fin=0,hits=0,queries=0,dec=0,bud=0,empties=0;
+    const r=new Uint32Array(F); const now=clock>>>0;
+    const lam=rate*stepPrev*1e-4, e=Math.max(emptiesPrev,1);
+    for(let i=0;i<NR;i++){ r.set(R.subarray(i*F,i*F+F));
+      if(r[9]===1){ ttftSum=(ttftSum+((now-r[8])>>>0))>>>0; ttftCnt++; r[9]=2; }
+      if(r[0]===4||r[0]===5){ let s=0; if(r[6]>0){ const gi=r[6]-1; s=GB[gi*4+3]; GB[gi*4+1]--; GB[gi*4+2]=T; }
+        for(let q=s;q<r[5];q++){ const p=PT[i*MAXP+q]; FL[top++]=p; PI[p]=0; HE[p]=-1; } r[5]=0; r[6]=0;
+        if(r[0]===5){ r[1]+=r[4]; r[2]-=r[4]; r[4]=0; r[3]=0; r[0]=1; preempt++; } else r[0]=0; }
+      if(r[0]===0){ if(rnd(i+seed*7919,T*3+1)<lam/e){ const maxT=(MAXP-2)*16;
+          r[1]=D.pMin+Math.floor(rnd(i,T*7+3)*(D.pMax-D.pMin)); r[2]=c.gMin+Math.floor(rnd(i,T*9+4)*(c.gMax-c.gMin));
+          if(r[1]+r[2]>maxT){ r[1]=Math.min(r[1],maxT-32); r[2]=Math.max(16,Math.min(r[2],maxT-r[1])); }
+          r[6]=0;r[5]=0;r[3]=0;r[4]=0;r[10]=T;r[8]=now;r[9]=0;r[7]=0;
+          if(groups>0&&rnd(i,T*5+7)<c.share){ const z=rnd(i*31,T*13+11); r[7]=1+Math.min(groups-1,Math.floor(z*z*groups)); }
+          r[0]=1; } else empties++; }
+      if(r[0]===1) waiting++; if(r[0]===2||r[0]===3) running++;
+      R.set(r,i*F); }
+    for(let n=0;n<2&&top<D.lowWater;n++){ let best=-1,bl=0xffffffff; for(let gi=0;gi<GMAX;gi++) if(GB[gi*4]===1&&GB[gi*4+1]===0&&GB[gi*4+2]<bl){bl=GB[gi*4+2];best=gi;}
+      if(best<0) break; const s=GB[best*4+3]; for(let q=0;q<s;q++){ const p=GB[GH+best*GP+q]; FL[top++]=p; PI[p]=0; HE[p]=-1; } GB[best*4]=0; evicts++; }
+    for(let i=0;i<NR;i++){ r.set(R.subarray(i*F,i*F+F)); if(r[0]!==3) continue; dec++;
+      let n=1; if(c.specK>0){ let a=0; while(a<c.specK && rnd(i*31+a,T*13+5)<c.specAcc) a++; n=1+a; }
+      n=Math.min(n,r[2]-r[4]); const total=r[1]+r[4]+n; const old=r[5];
+      if(!ensure(i,r,total)){ r[0]=5; R.set(r,i*F); continue; }
+      if(r[9]===0) r[9]=1;
+      r[4]+=n; tok+=n; bud++; fillW(i,r[6]>0?GB[(r[6]-1)*4+3]:0,r[5],total,Math.max(old,1)-1); spawn(i,PT[i*MAXP+r[5]-1],n);
+      if(r[4]>=r[2]){ r[0]=4; fin++; } R.set(r,i*F); }
+    for(let i=0;i<NR;i++){ r.set(R.subarray(i*F,i*F+F));
+      if(r[0]===1){ if(running>=maxSeqs) continue; running++; r[0]=2; r[3]=0; r[5]=0; r[6]=0; queries+=r[1];
+        if(r[7]>0){ const gi=r[7]-1; if(GB[gi*4]===1){ const s=GB[gi*4+3]; if(s*16+16<=r[1]){ GB[gi*4+1]++; GB[gi*4+2]=T; for(let q=0;q<s;q++){ const p=GB[GH+gi*GP+q]; PT[i*MAXP+q]=p; HE[p]=1; } r[6]=r[7]; r[5]=s; r[3]=s*16; hits+=s*16; } } } }
+      if(r[0]!==2){ continue; }
+      const want=Math.min(r[1]-Math.min(r[3],r[1]),c.chunk); const take=bud<budget?Math.min(want,budget-bud):0; bud+=want;
+      const s=r[6]>0?GB[(r[6]-1)*4+3]:0;
+      if(take>0){ const old=r[5]; const ok=ensure(i,r,r[3]+take); const np=Math.min(r[3]+take,r[5]*16); const got=np-Math.min(r[3],np); r[3]=np; pre+=got;
+        if(r[5]>0) fillW(i,s,r[5],r[3],Math.max(old,1)-1); if(!ok&&got===0&&rnd(i,T*17+9)<.05){ r[0]=5; R.set(r,i*F); continue; } }
+      if(r[3]>=r[1]){ r[0]=3;
+        if(r[7]>0&&r[6]===0&&D.pfxPages>0){ const gi=r[7]-1, sp=D.pfxPages; if(sp<=r[5]&&sp*16+16<=r[1]&&GB[gi*4]===0){
+            for(let q=0;q<sp;q++){ const p=PT[i*MAXP+q]; GB[GH+gi*GP+q]=p; PI[p]=(0xFF00+gi)|(16<<16); } GB[gi*4+3]=sp; GB[gi*4+1]=1; GB[gi*4+2]=T; GB[gi*4]=1; r[6]=r[7]; } } }
+      R.set(r,i*F); }
+    let ms=STEP.base; if(dec>0||pre>0) ms=STEP.base*(1+(c.specK>0?STEP.specCost:0))+STEP.perSeq*dec/kk+STEP.perTok*pre/kk;
+    const st=Math.floor(ms*10); clock=(clock+st)>>>0; stepPrev=st;
+    for(let p=0;p<NP;p++){ const h=HE[p]*.88; HE[p]=Math.abs(h)<.01?0:h; }
+    for(let q=0;q<NPT;q++){ const o=q*8; if(PA[o+4]<=0) continue; const dt=1/24; PA[o]+=PA[o+2]*dt; PA[o+1]+=PA[o+3]*dt; PA[o+2]=PA[o+2]*1.012+.002; PA[o+3]=PA[o+3]*.985+Math.sin(PA[o]*11+PA[o+6]*40)*.004; PA[o+4]-=dt; }
+    // report in the same units the GPU press uses (loads scaled back up)
+    ST[0]=top; ST[1]=Math.round(running/kk); ST[2]=Math.round(waiting/kk); ST[3]=dec;
+    ST[4]+=Math.round(tok/kk); ST[5]+=Math.round(pre/kk); ST[6]+=preempt; ST[7]+=fin; ST[8]+=hits; ST[9]+=queries; ST[10]=T; ST[11]=clock; ST[12]=(ST[12]+st*Math.round(dec/kk))>>>0; ST[13]=ttftSum; ST[14]=ttftCnt; ST[15]=evicts;
+    let cg=0,cp=0; for(let gi=0;gi<GMAX;gi++) if(GB[gi*4]===1){ cg++; cp+=GB[gi*4+3]; } ST[16]=cg; ST[17]=cp; ST[18]=st;
+    if(pick.seq!==pickSeq){ pickSeq=pick.seq; if(pick.page<NP){ const o=PI[pick.page]&0xffff; if(o>=1&&o<=NR) follow=o-1; } }
+    if(follow<0||follow>=NR||R[follow*F]===0){ let cand=-1,rank=0; for(let i=0;i<NR;i++){ const s=R[i*F]; const rk=s===1?3:s===2?2:s===3?1:0; if(rk>rank){rank=rk;cand=i; if(rk===3) break;} } follow=cand; }
+    ST[19]=follow<0?0xffffffff:follow;
+    if(follow>=0){ for(let q=0;q<11;q++) ST[20+q]=R[follow*F+q]; ST[31]=R[follow*F+6]>0?GB[(R[follow*F+6]-1)*4+3]:0; const np=R[follow*F+5]; for(let q=0;q<MAXP;q++) ST[160+q]=q<np?PT[follow*MAXP+q]:0xffffffff; } else { ST[20]=0; ST[25]=0; ST[31]=0; }
+    const sl=32+2*(T%64); ST[sl]=Math.round(tok/kk); ST[sl+1]=Math.round(pre/kk); emptiesPrev=empties; T++;
+  }
+  /* sprites: one stamp per ink and fill level, rebuilt when the cell size changes */
+  const INKS=['#FF4FA3','#3FE0C5','#F997C8','#7FE98A','#95E4DC','#F1E9F7','#D4F53C','#D4F53C'];
+  const DIMS=['#A9396F','#2F957F','#A56A8B','#559A5E','#67978F'];
+  let atlas=null, aKey='', aS=0;
+  function buildAtlas(cs,big,dim){
+    aS=Math.max(2,Math.ceil(cs)); atlas=document.createElement('canvas'); atlas.width=aS*17; atlas.height=aS*8; const a=atlas.getContext('2d');
+    const gap=Math.max(1,Math.min(cs*.14,1.5*DPR)), w=cs-gap;
+    for(let ci=0;ci<8;ci++) for(let f=0;f<=16;f++){ const x=f*aS, y=ci*aS; const col=(dim&&ci<5)?DIMS[ci]:INKS[ci]; a.fillStyle=col; a.strokeStyle=col;
+      if(big){ const q=w/4, rad=q*.36; a.lineWidth=Math.max(1,q*.15);
+        for(let j=0;j<16;j++){ const cx=x+(j%4+.5)*q, cy=y+(Math.floor(j/4)+.5)*q; a.beginPath(); a.arc(cx,cy,rad,0,7);
+          if(ci===7){ a.globalAlpha=.9; a.arc(cx,cy,rad*.52,0,7,true); a.fill('evenodd'); }
+          else if(j<f){ a.globalAlpha=1; a.fill(); } else { a.globalAlpha=.5; a.arc(cx,cy,rad*.52,0,7,true); a.fill('evenodd'); } } a.globalAlpha=1; }
+      else { const fh=w*f/16; a.globalAlpha=ci===7?.34:.2; a.fillRect(x,y,w,w); if(ci!==7){ a.globalAlpha=.95; a.fillRect(x,y+w-fh,w,fh); } a.globalAlpha=1;
+        // punch a halftone screen through the stamp
+        const per=Math.max(2.4*DPR,Math.min(4.6*DPR,cs*.36)); a.save(); a.globalCompositeOperation='destination-out'; a.fillStyle='#000'; a.beginPath(); a.rect(x,y,aS,aS); a.clip();
+        for(let yy=0;yy<w+per;yy+=per) for(let xx=0;xx<w+per;xx+=per){ a.fillRect(x+xx-per*.14,y+yy-per*.14,per*.28,per*.28); } a.restore(); }
+    }
+  }
+  let hatch=null, wpat=null;
+  function patterns(){ const s=Math.round(7*DPR); const h=document.createElement('canvas'); h.width=h.height=s; const a=h.getContext('2d'); a.strokeStyle='rgba(241,233,247,.5)'; a.lineWidth=Math.max(1,DPR*.9); a.beginPath(); a.moveTo(-1,s+1); a.lineTo(s+1,-1); a.moveTo(-1,1); a.lineTo(1,-1); a.moveTo(s-1,s+1); a.lineTo(s+1,s-1); a.stroke(); hatch=g.createPattern(h,'repeat');
+    const t=Math.round(4*DPR); const w=document.createElement('canvas'); w.width=w.height=t; const b=w.getContext('2d'); b.fillStyle='#4A3B78'; b.fillRect(0,0,t,t); b.fillStyle='#A58BFF'; b.beginPath(); b.arc(t/2,t/2,t*.4,0,7); b.fill(); wpat=g.createPattern(w,'repeat'); }
+  function region(a,b,cols,cs,gx,gy,fn){ if(b<=a) return; for(let row=Math.floor(a/cols); row<=Math.floor((b-1)/cols); row++){ const c0=Math.max(a,row*cols)-row*cols, c1=Math.min(b,(row+1)*cols)-row*cols; fn(gx+c0*cs,gy+row*cs,(c1-c0)*cs,cs); } }
+  let fc=0, pdpr=0;
+  reset(cfg);
+  return { kind:'cpu', get NP(){return NP}, get D(){return D},
+    apply(cc,needReset){ if(needReset) reset(cc); else { c=cc; D=derive(c,NP); } },
+    frame(ticks){
+      if(warm>0){ ticks=warm; warm=0; }
+      for(let t=0;t<ticks;t++) tick();
+      const W=canvas.width,H=canvas.height;
+      if(pdpr!==DPR){ pdpr=DPR; patterns(); aKey=''; }
+      g.globalCompositeOperation='source-over'; g.globalAlpha=1; g.fillStyle='#1C1424'; g.fillRect(0,0,W,H);
+      const [gx,gy,gw]=view.rect; const cols=view.cols, cs=gw/cols, big=view.big>0.5, hero=!!cfg.hero;
+      const key=cs.toFixed(2)+big+hero; if(key!==aKey){ aKey=key; buildAtlas(cs,big,hero); }
+      const ink=Math.min(1,view.ghost*1.34); g.save(); g.globalAlpha=ink;
+      g.fillStyle=wpat; region(0,D.wEnd,cols,cs,gx,gy,(x,y,w,h)=>g.fillRect(x,y,w+.5,h+.5));
+      g.fillStyle=hatch; region(D.kvEnd,NP,cols,cs,gx,gy,(x,y,w,h)=>g.fillRect(x,y,w,h));
+      const gap=Math.max(1,Math.min(cs*.14,1.5*DPR)), w=cs-gap, fol=ST[19];
+      for(let p=D.wEnd;p<D.kvEnd;p++){
+        const x=gx+(p%cols)*cs, y=gy+Math.floor(p/cols)*cs; if(y>H||x>W||y<-cs) continue;
+        const info=PI[p], own=info&0xffff, f=(info>>>16)&31, ht=HE[p];
+        if(own===0){ if(ht<-.05){ g.globalAlpha=ink*Math.min(1,-ht)*.85; g.fillStyle='#FF4FA3'; g.fillRect(x,y,w,w); g.globalAlpha=ink; } else { g.fillStyle='rgba(241,233,247,.42)'; const r0=(big?1.25:.85)*DPR; g.fillRect(x+w/2-r0,y+w/2-r0,r0*2,r0*2); } continue; }
+        let ci; if(own>=0xFF00){ ci=GB[(own-0xFF00)*4+1]>0?6:7; } else { const q=own-1; ci=(hero&&q===fol)?5:hsh(q)%5; }
+        g.drawImage(atlas,(ci>=6?16:f)*aS,ci*aS,aS,aS,x,y,aS,aS);
+        if(ht>.12){ g.globalAlpha=ink*ht*(own>=0xFF00?.6:.36); g.fillStyle=own>=0xFF00?'#FF4FA3':'#F1E9F7'; g.fillRect(x,y,w,w); g.globalAlpha=ink; }
+      }
+      g.restore();
+      if(!RM && cfg.parts && view.ghost>0.85){ g.save(); for(let q=0;q<NPT;q++){ const o=q*8; if(PA[o+4]<=0) continue; const kk2=PA[o+5]|0;
+          g.globalAlpha=Math.min(1,PA[o+4])*.9; g.fillStyle=(kk2===fol&&hero)?'#F1E9F7':INKS[hsh(kk2)%5];
+          const rr=Math.max((1.2+PA[o+6]*.9)*DPR,Math.min(cs*.1,(2.6+PA[o+6]*1.6)*DPR)); g.beginPath(); g.arc(gx+PA[o]*gw, gy+PA[o+1]*view.rect[3], rr*.8,0,7); g.fill(); } g.restore(); }
+      if(view.ghost>0.5 && view.plate[2]>1){ const [px,py,pw,ph2]=view.plate; const G=7*DPR,Ln=16*DPR; g.strokeStyle='rgba(241,233,247,.85)'; g.lineWidth=DPR*.9; g.beginPath();
+        for(const [x,y,sx2,sy2] of [[px,py,-1,-1],[px+pw,py,1,-1],[px,py+ph2,-1,1],[px+pw,py+ph2,1,1]]){ g.moveTo(x+sx2*G,y); g.lineTo(x+sx2*(G+Ln),y); g.moveTo(x,y+sy2*G); g.lineTo(x,y+sy2*(G+Ln)); } g.stroke(); }
+      if((++fc)%5===0 || fc<3){ engine.stats=ST.slice(); engine.statsT=performance.now(); onStats(); }
+      if(fc===1) markLive();
+    }
+  };
+}
+
+/* ================= frame loop & view ================= */
+const inkC=$('#ink'), ig=inkC.getContext('2d');
+function resize(){
+  const maxPix=4.2e6;
+  DPR=Math.min(devicePixelRatio||1,2);
+  if(innerWidth*innerHeight*DPR*DPR>maxPix) DPR=Math.sqrt(maxPix/(innerWidth*innerHeight));
+  for(const c of [$('#gpu'),$('#cpu'),inkC]){ c.width=Math.round(innerWidth*DPR); c.height=Math.round(innerHeight*DPR); }
+  view.snap=true;
+  if(slides[cur] && engine.sim){ const c=cfgFor(slides[cur]); if(c.np!==cfg.np) applyScene(slides[cur]); }
+}
+addEventListener('resize',resize);
+
+function targetRect(){
+  const s=slides[cur]; if(!s) return null;
+  const full=s.dataset.plate==='full'; const pl=s.querySelector('[data-plate]');
+  let r, ghost=1;
+  if(full){ r={left:-8,top:-8,width:innerWidth+16,height:innerHeight+16}; }
+  else if(pl) r=pl.getBoundingClientRect();
+  else {
+    // text pages: the press keeps running in the page's outer margin, like printing on the fore-edge
+    const cs=getComputedStyle(document.documentElement);
+    const tabw=parseFloat(cs.getPropertyValue('--tabw'))||0;
+    const padx=Math.min(84,Math.max(18,innerWidth*.042));
+    if(tabw<1){ r={left:innerWidth-5,top:44,width:3,height:Math.max(40,innerHeight-110)}; ghost=.8; }
+    else { const top=Math.max(44,innerHeight*.074); r={left:innerWidth-tabw-padx*.72,top,width:padx*.42,height:innerHeight-top-Math.max(64,innerHeight*.094)}; ghost=.8; }
+  }
+  const plate=(!full&&pl)?[r.left*DPR,r.top*DPR,r.width*DPR,r.height*DPR]:[0,0,0,0];
+  return {x:r.left*DPR,y:r.top*DPR,w:Math.max(3,r.width*DPR),h:Math.max(10,r.height*DPR),plate,ghost,strip:!full&&!pl};
+}
+function fitGrid(t,NP){
+  if(t.strip){ const cols=Math.max(2,Math.round(t.w/(7*DPR))); const cs=t.w/cols; return {cols,rows:Math.ceil(NP/cols),rect:[t.x,t.y,t.w,Math.ceil(NP/cols)*cs],cs}; }
+  const cols=Math.max(8,Math.round(Math.sqrt(NP*t.w/t.h)));
+  const rows=Math.ceil(NP/cols);
+  const cs=Math.min(t.w/cols,t.h/rows);
+  const gw=cols*cs, gh=rows*cs;
+  return {cols,rows,rect:[t.x+(t.w-gw)/2,t.y+(t.h-gh)/2,gw,gh],cs};
+}
+let lastT=performance.now(), acc=0, curCols=-1, lastStatsDraw=0;
+function loop(now){
+  requestAnimationFrame(loop);
+  if(!engine.sim || document.hidden){ lastT=now; return; }
+  const dt=Math.min(.1,(now-lastT)/1000); lastT=now;
+  const t=targetRect();
+  if(t){
+    const f=fitGrid(t,engine.sim.NP);
+    const big=f.cs>=Math.max(9.5*DPR,14)?1:0;
+    if(f.cols!==curCols){ curCols=f.cols; view.cols=f.cols; view.rows=f.rows; engine.sim.apply(cfg,false); view.snap=true; }
+    view.big=big;
+    view.target=f.rect; view.ghostT=t.ghost; view.plateT=t.plate;
+    const k=view.snap||RM?1:1-Math.exp(-dt*10);
+    for(let i=0;i<4;i++){ view.rect[i]+= (view.target[i]-view.rect[i])*k; view.plate[i]+=((view.plateT[i]||0)-view.plate[i])*k; }
+    view.ghost+=(view.ghostT-view.ghost)*(RM?1:1-Math.exp(-dt*5));
+    view.snap=false;
+  }
+  acc+=dt*24*(RM?.25:1)*(cfg.speed||1); let n=Math.floor(acc); acc-=n; n=Math.min(n,4);
+  try{ engine.sim.frame(n); }catch(err){ console.error(err); if(engine.sim.kind==='gpu') fallback(String(err)); }
+  drawInk(); drawTicker(); drawTrace();
+}
+function markLive(){ document.body.classList.add('live'); }
+
+let sceneKey='';
+function applyScene(s, force){
+  const c=cfgFor(s);
+  const key=[c.name==='calm'?'calm':s.id,c.np,c.nReq,c.wFrac,c.util].join('|');
+  const needReset = force || key!==sceneKey;
+  sceneKey=key; cfg=c;
+  if(engine.sim){ engine.sim.apply(cfg,needReset); if(needReset){ view.ghost=RM?1:0; engine.hist.length=0; engine.m={}; curCols=-1; view.snap=true; } }
+}
+
+/* ---- picking a page: follow the request that owns it ---- */
+function pickAt(e,pl){
+  if(!engine.sim) return;
+  const x=e.clientX*DPR, y=e.clientY*DPR, cs=view.rect[2]/view.cols;
+  const cx=Math.floor((x-view.rect[0])/cs), cy=Math.floor((y-view.rect[1])/cs);
+  if(cx<0||cy<0||cx>=view.cols||cy>=view.rows) return;
+  const p=cy*view.cols+cx; if(p===pick.page) return;
+  pick.page=p; pick.seq=(pick.seq+1)>>>0; engine.sim.apply(cfg,false);
+}
+
+/* ---- overlay: the followed request's block table drawn as a thread through physical pages ---- */
+function drawInk(){
+  ig.clearRect(0,0,inkC.width,inkC.height);
+  if(!cfg.thread || view.ghost<.6) return;
+  const S=engine.stats, np=Math.min(MAXP,S[25]); if(!np || S[19]===0xffffffff) return;
+  const cs=view.rect[2]/view.cols, gap=Math.max(1.2*DPR,cs*.05), w=cs-gap;
+  const pt=k=>{ const p=S[160+k]; return [view.rect[0]+(p%view.cols)*cs+w/2, view.rect[1]+Math.floor(p/view.cols)*cs+w/2]; };
+  ig.save(); ig.globalAlpha=Math.min(1,(view.ghost-.6)*3);
+  ig.lineJoin='round'; ig.lineCap='round';
+  ig.beginPath(); for(let k=0;k<np;k++){ if(S[160+k]===0xffffffff) break; const [x,y]=pt(k); k?ig.lineTo(x,y):ig.moveTo(x,y); }
+  ig.strokeStyle='#1C1424'; ig.lineWidth=Math.max(3.2*DPR,cs*.14); ig.stroke();
+  ig.strokeStyle='#F1E9F7'; ig.lineWidth=Math.max(1.1*DPR,cs*.045); ig.stroke();
+  const lab=cs>=26*DPR; const fs=Math.max(9*DPR,Math.min(13*DPR,cs*.3));
+  ig.font=`700 ${fs}px "Courier Prime",ui-monospace,Menlo,monospace`; ig.textAlign='center'; ig.textBaseline='middle';
+  for(let k=0;k<np;k++){ if(S[160+k]===0xffffffff) break; const [x,y]=pt(k); const sh=k<S[31];
+    if(lab||k===0||k===np-1){ const t=String(k), tw=Math.max(fs*.95,ig.measureText(t).width+fs*.5); ig.fillStyle=sh?'#D4F53C':'#F1E9F7'; ig.fillRect(x-tw/2,y-fs*.62,tw,fs*1.24); ig.fillStyle='#1C1424'; ig.fillText(t,x,y+fs*.06); }
+    else { ig.fillStyle='#F1E9F7'; ig.fillRect(x-1.6*DPR,y-1.6*DPR,3.2*DPR,3.2*DPR); } }
+  ig.restore();
+}
+
+/* ================= stats → readouts ================= */
+const fmt=n=>n>=1e4?(n/1e3).toFixed(0)+'k':n>=1e3?(n/1e3).toFixed(1)+'k':String(Math.round(n));
+const fms=ms=>!isFinite(ms)||ms<=0?'–':ms>=10000?(ms/1000).toFixed(0)+'<small>s</small>':ms>=1000?(ms/1000).toFixed(1)+'<small>s</small>':Math.round(ms)+'<small>ms</small>';
+const traceBuf={ttft:[],itl:[],tps:[]};
+function onStats(){
+  const S=engine.stats, H=engine.hist;
+  H.push({t:engine.statsT,s:[S[4],S[5],S[6],S[8],S[9],S[11],S[12],S[13],S[14],S[15]]});
+  while(H.length>2 && engine.statsT-H[0].t>2600) H.shift();
+  const a=H[0].s,b=H[H.length-1].s, d=i=>(b[i]-a[i])>>>0;
+  const m=engine.m, secs=d(5)/1e4;          // simulated seconds in the window
+  if(secs>0.2){
+    m.tps=d(0)/secs; m.itl=d(0)>0?d(6)/d(0)/10:NaN; m.pre=d(2)/secs;
+    if(d(8)>0) m.ttft=d(7)/d(8)/10;
+    m.hit=d(4)>0?d(3)/d(4):0;
+  }
+  if(H.length%2===0 && secs>0.2){ for(const k of ['ttft','itl','tps']){ traceBuf[k].push(m[k]||0); if(traceBuf[k].length>90) traceBuf[k].shift(); } }
+  updateReadouts();
+}
+function updateReadouts(){
+  const S=engine.stats, s=slides[cur]; if(!s||!engine.sim) return;
+  const m=engine.m, D=engine.sim.D, used=Math.max(0,D.kv-S[0]);
+  const set=(id,v)=>{const e=document.getElementById(id); if(e && e.innerHTML!==v) e.innerHTML=v;};
+  const wr=`${S[2]} · ${S[1]}`;
+  if(s.id==='batching'){ set('r_tps',fmt(m.tps||0)); set('r_itl',fms(m.itl)); set('r_ttft',fms(m.ttft)); set('r_wait',wr); }
+  if(s.id==='preempt'){ set('p_pre',(m.pre||0).toFixed(1)); set('p_free',fmt(S[0])); set('p_ttft',fms(m.ttft)); set('p_tps',fmt(m.tps||0)); }
+  if(s.id==='prefix'){ set('x_hit',Math.round((m.hit||0)*100)+'<small>%</small>'); set('x_grp',String(S[16])); set('x_ev',String(S[15])); set('x_ttft',fms(m.ttft)); }
+  if(s.id==='drive'){ set('d_ttft',fms(m.ttft)); set('d_itl',fms(m.itl)); set('d_tps',fmt(m.tps||0)); set('d_hit',Math.round((m.hit||0)*100)+'<small>%</small>'); set('d_q',wr); set('d_pre',fmt(S[6])); set('d_ev',fmt(S[15])); }
+  // caption under the plate: what the followed request is doing right now
+  const live=s.querySelector('[data-live]');
+  if(live){
+    const fo=S[19], st=S[20], pr=S[21], gen=S[22], pre=S[23], done=S[24], np=S[25], sh=S[31];
+    let line='';
+    if(s.id==='memory'){ line=`KV pool: ${fmt(D.kv)} pages on the plate · ${Math.round(used/Math.max(1,D.kv)*100)}% in use · ${S[1]} running`; }
+    else if(s.id==='colophon'){ line=`${S[1]} running · ${S[2]} waiting · ${Math.round(used/Math.max(1,D.kv)*100)}% of KV pages in use`; }
+    else if(!cfg.hero){ line=`${S[1]} running · ${S[2]} waiting · ${Math.round(used/Math.max(1,D.kv)*100)}% of KV pages in use${S[16]?` · ${S[16]} prefixes cached`:''}`; }
+    else if(fo===0xffffffff||st===0){ line='waiting for the next request…'; }
+    else {
+      const id=`request ${fo}`;
+      if(st===1) line=`${id}: ${pr} prompt tokens, waiting for a slot (${S[2]} queued)`;
+      else if(st===2) line=`${id}: prefill ${pre}/${pr} tokens · ${np} pages${sh?` · ${sh} shared`:''}`;
+      else if(st===3) line=`${id}: decoding ${done}/${gen} · ${np} pages${sh?` · ${sh} shared`:''} · streaming`;
+      else if(st===5) line=`${id}: preempted, will be recomputed`;
+      else line=`${id}: done, ${gen} tokens streamed`;
+    }
+    if(live.textContent!==line) live.textContent=line;
+  }
+  if(s.id==='path'){
+    const st=S[20], pre=S[23], age=(S[10]-S[30])>>>0;
+    let lit='http';
+    if(S[19]===0xffffffff||st===0) lit='stream';
+    else if(st===1) lit=age<3?'http':age<6?'tok':'wait';
+    else if(st===2) lit=pre===0?'sched':'prefill';
+    else if(st===3) lit='decode';
+    else if(st===5) lit='wait';
+    else lit='stream';
+    $$('#stations div').forEach(d=>d.classList.toggle('lit', d.dataset.st===lit || (lit==='decode'&&d.dataset.st==='stream')));
+  }
+  if(s.id==='paged'){
+    const el=$('#ptab'); const np=S[25], sh=S[31];
+    let h='<span class="h">logical block</span>'; for(let k=0;k<8;k++) h+=`<span>${k}</span>`;
+    h+='<span class="h row2">physical page</span>'; for(let k=0;k<8;k++){ const v=S[160+k]; h+=`<span class="row2 ${k<sh?'sh':k===np-1?'ph':''}">${v===0xffffffff||k>=np?'·':v}</span>`; }
+    if(el.innerHTML!==h) el.innerHTML=h;
+  }
+}
+
+/* strip charts */
+function sizeCanvas(c){ const w=Math.round(c.clientWidth*DPR), h=Math.round(c.clientHeight*DPR); if(w&&(c.width!==w||c.height!==h)){ c.width=w; c.height=h; } return c.width>0; }
+const tk=$('#ticker'), tg=tk.getContext('2d');
+function drawTicker(){
+  if(!slides[cur]||slides[cur].id!=='batching'||!sizeCanvas(tk)) return;
+  const S=engine.stats, T=S[10];
+  tg.clearRect(0,0,tk.width,tk.height);
+  let mx=1; for(let k=0;k<64;k++){ mx=Math.max(mx,S[32+2*k]+S[33+2*k]); }
+  const bud=cfg.budget; mx=Math.max(mx,bud*1.05);
+  const bw=tk.width/64;
+  for(let k=0;k<64;k++){
+    const t=(T-63+k+6400)%64; const d=S[32+2*t], p=S[33+2*t];
+    const sq=v=>Math.sqrt(v/mx)*tk.height; const hd=sq(d), hp=sq(d+p)-hd;
+    tg.fillStyle='#3FE0C5'; tg.fillRect(k*bw+1,tk.height-hd,bw-2,hd);
+    tg.fillStyle='#FF4FA3'; tg.fillRect(k*bw+1,tk.height-hd-hp,bw-2,hp);
+  }
+  const by=tk.height-Math.sqrt(bud/mx)*tk.height;
+  tg.strokeStyle='#F1E9F7'; tg.setLineDash([4*DPR,3*DPR]); tg.lineWidth=DPR; tg.beginPath(); tg.moveTo(0,by); tg.lineTo(tk.width,by); tg.stroke(); tg.setLineDash([]);
+  tg.fillStyle='#F1E9F7'; tg.font=`italic ${11.5*DPR}px Newsreader, Georgia, serif`; tg.textAlign='right'; tg.fillText('token budget (√ scale)',tk.width-2*DPR,Math.max(12*DPR,by-4*DPR)); tg.textAlign='left';
+}
+const tr=$('#trace'), trg=tr.getContext('2d');
+function drawTrace(){
+  if(!slides[cur]||slides[cur].id!=='drive'||!sizeCanvas(tr)) return;
+  const W=tr.width,H=tr.height; trg.clearRect(0,0,W,H);
+  const cols=[['ttft','#D4F53C'],['itl','#FF4FA3'],['tps','#3FE0C5']], cw=W/3;
+  cols.forEach(([k,col],i)=>{
+    const a=traceBuf[k]; const x0=i*cw, pad=4*DPR, w=cw-14*DPR;
+    trg.strokeStyle='rgba(241,233,247,.25)'; trg.lineWidth=DPR; trg.beginPath(); trg.moveTo(x0,H-.5*DPR); trg.lineTo(x0+w,H-.5*DPR); trg.stroke();
+    if(a.length<2) return;
+    let mx=0; for(const v of a) mx=Math.max(mx,v); mx=mx||1;
+    trg.beginPath(); a.forEach((v,j)=>{ const x=x0+j/89*w, y=H-pad-(v/mx)*(H-2*pad); j?trg.lineTo(x,y):trg.moveTo(x,y); });
+    trg.strokeStyle=col; trg.lineWidth=1.6*DPR; trg.lineJoin='round'; trg.stroke();
+    const lx=x0+(a.length-1)/89*w, ly=H-pad-(a[a.length-1]/mx)*(H-2*pad); trg.fillStyle=col; trg.beginPath(); trg.arc(lx,ly,2.6*DPR,0,7); trg.fill();
+  });
+}
+
+/* ================= interactive controls ================= */
+function bindRange(id,fn){ const el=$('#'+id), out=$('#'+id+'O'); const h=()=>{ out.textContent=fn(+el.value); }; el.addEventListener('input',h); h(); return el; }
+function liveApply(){ if(slides[cur]) applyScene(slides[cur]); }
+bindRange('ms',v=>{UI.batch.maxSeqs=v; liveApply(); return v;});
+bindRange('bt',v=>{UI.batch.budget=v; liveApply(); return v;});
+bindRange('ar',v=>{UI.batch.rate=v/10; liveApply(); return (v/10).toFixed(1);});
+let utilTimer=0;
+bindRange('gu',v=>{UI.preempt.util=v/100; clearTimeout(utilTimer); utilTimer=setTimeout(liveApply,180); return (v/100).toFixed(2);});
+bindRange('ar2',v=>{UI.preempt.rate=v/10; liveApply(); return (v/10).toFixed(1);});
+/* the drive page */
+const unpreset=()=>$$('#presets button').forEach(x=>x.setAttribute('aria-pressed','false'));
+let presetting=false;
+const dAr=bindRange('d_ar',v=>{UI.drive.rate=v/10; if(!presetting){unpreset();} liveApply(); return (v/10).toFixed(1);});
+const dMs=bindRange('d_ms',v=>{UI.drive.maxSeqs=v; if(!presetting){unpreset();} liveApply(); return v;});
+const dPl=bindRange('d_pl',v=>{UI.drive.L=v; if(!presetting){unpreset();} liveApply(); return v;});
+const dSh=bindRange('d_sh',v=>{UI.drive.share=v/100; if(!presetting){unpreset();} liveApply(); return v+'%';});
+const PRESETS={quiet:[8,32,320,50],agents:[14,48,560,95],docs:[9,24,800,10],over:[40,128,400,30]};
+$$('#presets button').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); const p=PRESETS[b.dataset.p]; presetting=true;
+  [dAr,dMs,dPl,dSh].forEach((el,i)=>{ el.value=p[i]; el.dispatchEvent(new Event('input')); }); presetting=false;
+  $$('#presets button').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false')); }));
+
+/* memory calculator */
+const FMT={bf16:{gb:54.0,label:'BF16, 27B × 2 B',est:1},fp8:{gb:27.0,label:'FP8, 27B × 1 B',est:1},nvfp4:{gb:15.2,label:'NVFP4, 27B × 4.5 bits',est:1},mixed:{gb:21.9,label:'NVIDIA mixed NVFP4/FP8 checkpoint (measured)',est:0}};
+const CTX=[8192,32768,65536,131072,196608,262144];
+let memF='mixed';
+function memCalc(){
+  const util=+$('#mu').value/100, ctx=CTX[+$('#mc').value];
+  $('#muO').textContent=util.toFixed(2); $('#mcO').textContent=ctx.toLocaleString('en-US');
+  const W=FMT[memF].gb, Dr=3.85, O=4, budget=util*128, kv=Math.max(0,budget-W-Dr-O);
+  const tokens=kv*1e9/32768, per=ctx*32768/1e9, fits=tokens/ctx;
+  const bar=$('#membar').children; const pc=x=>Math.max(0,x/128*100)+'%';
+  bar[0].style.flexBasis=pc(W); bar[0].textContent='weights';
+  bar[1].style.flexBasis=pc(Dr); bar[1].textContent='';
+  bar[2].style.flexBasis=pc(Math.max(0,Math.min(O,budget-W-Dr))); bar[2].textContent='';
+  bar[3].style.flexBasis=pc(kv); bar[3].textContent=kv>8?'KV cache':'';
+  bar[4].style.flexBasis=pc(128-budget); bar[4].textContent='OS & apps';
+  const e=x=>x?' <span class="est">estimate</span>':'';
+  $('#memtab').innerHTML=`<tbody>
+   <tr><th scope="row">vLLM's share</th><td>${util.toFixed(2)} × 128 GB = <b>${budget.toFixed(1)} GB</b>${e(1)}</td></tr>
+   <tr><th scope="row">Weights</th><td>${W.toFixed(1)} GB · ${FMT[memF].label}${e(FMT[memF].est)}</td></tr>
+   <tr><th scope="row">Draft + overhead</th><td>3.85 GB DFlash2 draft + 4 GB working memory${e(1)}</td></tr>
+   <tr><th scope="row">KV pool</th><td><b>${kv.toFixed(1)} GB</b> ÷ 32 KiB = <b>${(tokens/1e6).toFixed(2)} M tokens</b>${e(1)}</td></tr>
+   <tr><th scope="row">Fits at once</th><td>${per.toFixed(2)} GB each → <b>${fits.toFixed(1)}</b> requests of ${ctx.toLocaleString('en-US')} tokens${fits<8?' (fewer than <code>--max-num-seqs 8</code>)':''}</td></tr></tbody>`;
+  UI.memory.wFrac=Math.min(.8,(W+Dr+O)/128); UI.memory.util=Math.max(util,UI.memory.wFrac+.06);
+}
+$$('#fmt button').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation(); memF=b.dataset.f; $$('#fmt button').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false')); memCalc(); liveApply();}));
+let memTimer=0;
+$('#mu').addEventListener('input',()=>{memCalc(); clearTimeout(memTimer); memTimer=setTimeout(liveApply,180);});
+$('#mc').addEventListener('input',memCalc);
+memCalc();
+
+/* speculative decoding widget */
+const SENT='the cache keeps a key and a value for every token so that each new step can reuse what the model has already computed instead of reading the whole prompt again'.split(' ');
+let specPos=0;
+function specE(){ const a=+$('#sa').value/100, k=+$('#sk').value; const E=(1-Math.pow(a,k+1))/(1-a); $('#specE').textContent=E.toFixed(2); UI.spec.specK=k; UI.spec.specAcc=a; }
+bindRange('sa',v=>{specE(); liveApply(); return (v/100).toFixed(2);});
+bindRange('sk',v=>{specE(); liveApply(); return v;});
+specE();
+const row=$('#specrow');
+function specStep(){
+  if(!slides[cur]||slides[cur].id!=='spec'){ setTimeout(specStep,500); return; }
+  const a=+$('#sa').value/100, k=+$('#sk').value;
+  if(row.children.length>18){ row.innerHTML=''; }
+  const draft=[]; for(let j=0;j<k;j++){ const sp=document.createElement('span'); sp.className='draft'; sp.textContent=SENT[(specPos+j)%SENT.length]; row.appendChild(sp); draft.push(sp); }
+  setTimeout(()=>{
+    let acc2=0; while(acc2<k && Math.random()<a) acc2++;
+    draft.forEach((sp,j)=>{ sp.className = j<acc2?'acc':'rej'; });
+    const b=document.createElement('span'); b.className='bonus'; b.textContent=SENT[(specPos+acc2)%SENT.length]; row.appendChild(b);
+    specPos+=acc2+1;
+    setTimeout(()=>{ draft.slice(acc2).forEach(sp=>sp.remove()); b.className='acc'; setTimeout(specStep, RM?1600:700); }, RM?900:650);
+  }, RM?900:650);
+}
+specStep();
+
+/* layers strip */
+(()=>{ const el=$('#layers'); let h=''; for(let i=0;i<64;i++) h+=`<i class="${(i%4)===3?'f':''}"></i>`; el.innerHTML=h; })();
+
+/* ================= quantiser ================= */
+const FP4=[0,.5,1,1.5,2,3,4,6];
+function q4(x){ const s=Math.sign(x), a=Math.min(Math.abs(x),6); let best=0,bd=9; for(const v of FP4){ const d=Math.abs(a-v); if(d<bd){bd=d;best=v;} } return s*best; }
+function e4m3(x){ if(x<=0) return 0; const e=Math.max(-6,Math.floor(Math.log2(x))); const step=Math.pow(2,e-3); return Math.min(448,Math.round(x/step)*step); }
+function gauss(r){ let u=0,v=0; while(!u) u=r(); v=r(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+let qseed=7, W32=[];
+function newW(out){ const r=mulberry(qseed++); W32=[...Array(32)].map(()=>gauss(r)*0.021); if(out){ W32[5+Math.floor(r()*20)]=0.13*(r()<.5?-1:1); } drawQuant(); }
+function drawQuant(){
+  const svg=$('#quant'); const amaxT=Math.max(...W32.map(Math.abs));
+  const gscale=amaxT/(6*448);
+  const nv=W32.map((x,i)=>{ const b=Math.floor(i/16); const blk=W32.slice(b*16,b*16+16); const am=Math.max(...blk.map(Math.abs)); const s=e4m3(am/6/gscale)*gscale||1e-9; return q4(x/s)*s; });
+  const am32=Math.max(...W32.map(Math.abs)); const mxs=Math.pow(2,Math.floor(Math.log2(am32))-2);
+  const mx=W32.map(x=>q4(x/mxs)*mxs);
+  const rms=a=>Math.sqrt(a.reduce((s,v,i)=>s+(v-W32[i])**2,0)/32);
+  const rows=[{n:'BF16 original',v:W32,c:'#F1E9F7'},{n:'NVFP4 · 2 blocks of 16',v:nv,c:'#FF4FA3',blk:16},{n:'MXFP4 · 1 block of 32',v:mx,c:'#3FE0C5',blk:32}];
+  const lim=Math.max(amaxT*1.15,.03); const x0=24,x1=628,rh=124,mid=70;
+  let h='';
+  rows.forEach((r,ri)=>{
+    const y0=ri*rh+2, cy=y0+mid; const sy=v=>cy - v/lim*44;
+    h+=`<text x="${x0}" y="${y0+13}" font-size="16" font-style="italic" fill="#D3C6E0">${r.n}</text>`;
+    h+=`<line x1="${x0}" x2="${x1}" y1="${cy}" y2="${cy}" stroke="#F1E9F7" stroke-width="1"/>`;
+    if(r.blk){ for(let b=0;b<=32;b+=r.blk){ const x=x0+b*(x1-x0)/32; h+=`<line x1="${x}" x2="${x}" y1="${cy-46}" y2="${cy+48}" stroke="${r.c}" stroke-width="1.4" stroke-dasharray="3 3"/>`; } }
+    r.v.forEach((v,i)=>{ const x=x0+(i+.5)*(x1-x0)/32;
+      if(ri>0){ h+=`<line x1="${x}" x2="${x}" y1="${sy(W32[i])}" y2="${sy(v)}" stroke="${r.c}" stroke-width="2" opacity=".45"/>`;
+        h+=`<circle cx="${x}" cy="${sy(W32[i])}" r="3.6" fill="none" stroke="#F1E9F7" stroke-width="1"/>`; }
+      h+=`<circle cx="${x}" cy="${sy(v)}" r="${ri?4.4:3.6}" fill="${ri?r.c:'none'}" stroke="${ri?'none':'#F1E9F7'}" stroke-width="1.2" />`; });
+  });
+  svg.innerHTML=h;
+  $('#qErr').innerHTML=`<span>RMS error · <b style="color:var(--pink)">NVFP4 ${(rms(nv)*1000).toFixed(2)}e-3</b></span><span><b style="color:var(--blue)">MXFP4 ${(rms(mx)*1000).toFixed(2)}e-3</b></span>`;
+}
+$('#qNew').addEventListener('click',e=>{e.stopPropagation();newW(false)});
+$('#qOut').addEventListener('click',e=>{e.stopPropagation();newW(true)});
+newW(false);
+
+/* ================= sizing chart ================= */
+(()=>{
+  const data=[['Kimi K3.1 Pro',1561,'MXFP4'],['Mistral Large 4',1061,'FP8'],['Mistral Large 4 NVFP4',610,'NVFP4'],['gpt-oss-120b',65.2,'MXFP4'],['Qwen3.8-27B NVFP4',21.9,'mixed']];
+  const X0=8,X1=512,max=1600, sx=v=>X0+v/max*(X1-X0);
+  let h='';
+  [[128,'1 Spark · 128 GB'],[512,'4 Sparks · 512 GB']].forEach(([v,l],i)=>{ const x=sx(v); for(let r=0;r<data.length;r++){ const yy=34+r*58; h+=`<line x1="${x}" x2="${x}" y1="${yy+10}" y2="${yy+40}" stroke="#F1E9F7" stroke-width="1.2" stroke-dasharray="${i?'4 3':'none'}"/>`; } h+=`<line x1="${x}" x2="${x}" y1="18" y2="24" stroke="#F1E9F7" stroke-width="1.2"/><text x="${x+4}" y="14" font-size="13" font-style="italic" fill="#F1E9F7" paint-order="stroke" stroke="#1C1424" stroke-width="5">${l}</text>`; });
+  data.forEach(([n,v,f],i)=>{ const y=34+i*58; const w=sx(v)-X0; const fits=v<=128;
+    h+=`<defs><pattern id="ht${i}" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(${15+i*30})"><circle cx="2.5" cy="2.5" r="1.9" fill="${fits?'#7CF29A':'#FF4FA3'}"/></pattern></defs>`;
+    h+=`<rect x="${X0}" y="${y+14}" width="${Math.max(3,w)}" height="22" fill="url(#ht${i})"/>`;
+    h+=`<text x="${X0}" y="${y+8}" font-size="15.5" font-weight="600" fill="#F1E9F7" paint-order="stroke" stroke="#1C1424" stroke-width="6" stroke-linejoin="round">${n} <tspan font-style="italic" font-weight="400" fill="#D3C6E0">${f} · ${v.toLocaleString('en-US')} GB</tspan></text>`; });
+  $('#sizes').innerHTML=h;
+})();
+
+/* ================= radix diagram ================= */
+(()=>{
+  const s=$('#radixSvg'); let h='';
+  const box=(x,y,w,t,c)=>`<rect x="${x}" y="${y}" width="${w}" height="24" fill="${c}" opacity=".92"/><text x="${x+w/2}" y="${y+16}" font-size="10.5" text-anchor="middle" class="mono" fill="#1C1424" textLength="${w-10}" lengthAdjust="spacingAndGlyphs">${t}</text>`;
+  h+=box(0,6,84,'h0 = H(∅, t0–15)','#D4F53C')+box(92,6,84,'h1 = H(h0, …)','#D4F53C')+box(184,6,84,'h2 = H(h1, …)','#FF9CCB');
+  h+=box(92,42,84,"h1′ = H(h0, …)",'#9AF0E0')+`<path d="M84 18 H92 M176 18 H184 M84 18 Q88 54 92 54" stroke="#F1E9F7" fill="none"/>`;
+  h+=`<text x="0" y="92" font-size="12" fill="#D3C6E0" font-style="italic">same parent + same tokens = same hash,</text><text x="0" y="107" font-size="12" fill="#D3C6E0" font-style="italic">so the block is reused</text>`;
+  h+=`<circle cx="330" cy="46" r="5" fill="#F1E9F7"/>`;
+  h+=`<path d="M335 46 L372 46" stroke="#F1E9F7"/>`+box(372,34,116,'“You are a helpful…”','#D4F53C');
+  h+=`<path d="M488 46 Q500 20 512 18 M488 46 Q500 72 512 74" stroke="#F1E9F7" fill="none"/>`;
+  h+=box(512,6,88,'“Summarise…”','#FF9CCB')+box(512,62,88,'“Translate…”','#9AF0E0');
+  h+=`<text x="320" y="107" font-size="12" fill="#D3C6E0" font-style="italic">edges hold runs of tokens; leaves are evicted first</text>`;
+  s.innerHTML=h;
+})();
+
+/* ================= EP diagram ================= */
+let pmode='ep', epDots=[];
+function drawEP(){
+  const s=$('#epSvg'); let h='';
+  const G=8, gx=i=>14+i*67, ink=['#FF4FA3','#3FE0C5','#D4F53C','#7CF29A','#A58BFF','#FFB3E0','#F1E9F7','#9AF0E0'];
+  h+=`<text x="14" y="18" font-size="14" font-style="italic" fill="#D3C6E0">${pmode==='ep'?'attention replicated on every GPU; 128 experts, 16 per GPU':'every layer sliced eight ways; each GPU holds 1/8 of every expert'}</text>`;
+  for(let i=0;i<G;i++){
+    const x=gx(i);
+    h+=`<rect x="${x}" y="32" width="58" height="300" fill="none" stroke="#F1E9F7" stroke-width="1.3"/>`;
+    h+=`<text x="${x+29}" y="350" text-anchor="middle" font-size="12.5" class="mono" fill="#F1E9F7">GPU ${i}</text>`;
+    h+=`<rect x="${x+5}" y="40" width="48" height="34" fill="${pmode==='ep'?'#3FE0C5':'url(#tpstripe)'}" opacity=".9"/><text x="${x+29}" y="61" text-anchor="middle" font-size="11" fill="#1C1424">${pmode==='ep'?'attn':'attn ⅛'}</text>`;
+    for(let e=0;e<16;e++){
+      const yy=84+e*15;
+      if(pmode==='ep'){ h+=`<rect x="${x+5}" y="${yy}" width="48" height="12" fill="${ink[(i*16+e)%8]}" opacity=".8"/>`; }
+      else { for(let k=0;k<8;k++){ h+=`<rect x="${x+5+k*6}" y="${yy}" width="5" height="12" fill="${ink[k]}" opacity=".72"/>`; } }
+    }
+  }
+  h=`<defs><pattern id="tpstripe" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="3" height="6" fill="#3FE0C5"/><rect x="3" width="3" height="6" fill="#2BB8A0"/></pattern></defs>`+h;
+  h+=`<g id="epd"></g>`;
+  s.innerHTML=h;
+  epDots=[];
+}
+$$('#pmode button').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation(); pmode=b.dataset.m; $$('#pmode button').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false')); drawEP();}));
+drawEP();
+let epLast=0;
+function epAnim(t){
+  requestAnimationFrame(epAnim);
+  if(RM||!slides[cur]||slides[cur].id!=='parallel') return;
+  const g=document.getElementById('epd'); if(!g) return;
+  if(t-epLast>260){ epLast=t;
+    const from=Math.floor(Math.random()*8);
+    if(pmode==='ep'){ for(let k=0;k<2;k++){ const to=Math.floor(Math.random()*8), e=Math.floor(Math.random()*16); epDots.push({x0:14+from*67+29,y0:76,x1:14+to*67+29,y1:90+e*15,t:0}); } }
+    else { for(let k=0;k<8;k++) epDots.push({x0:14+k*67+29,y0:76,x1:14+k*67+29,y1:90+Math.floor(Math.random()*16)*15,t:0}); }
+  }
+  let h=''; epDots=epDots.filter(d=>d.t<1);
+  for(const d of epDots){ d.t+=0.025; const e=d.t<.5?2*d.t*d.t:1-Math.pow(-2*d.t+2,2)/2; const x=d.x0+(d.x1-d.x0)*e, y=d.y0+(d.y1-d.y0)*e;
+    h+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="#F1E9F7" stroke="#1C1424" stroke-width="1.5"/>`; }
+  g.innerHTML=h;
+}
+requestAnimationFrame(epAnim);
+
+/* ================= enter hooks & boot ================= */
+function onEnter(s){ applyScene(s); updateReadouts(); }
+function setStamp(kind){
+  const st=$('#stamp');
+  if(kind==='gpu'){ st.textContent='Printed live by WebGPU compute shaders · tap a plate to follow a request'; st.classList.remove('cpu'); }
+  else { st.textContent='Printed live on the CPU: this browser has no WebGPU, so the Canvas 2D press is running'; st.classList.add('cpu');
+    $('#coverEngine').textContent='Behind this card an inference server is being simulated live. This browser has no WebGPU, so the Canvas 2D press runs the same scheduler: each square is a KV-cache page, each dot a token streaming out.'; }
+}
+function fallback(reason){
+  console.info('Using the CPU press:',reason);
+  engine.sim=initCPU(); engine.kind='cpu'; window.__engine={kind:'cpu',reason};
+  setStamp('cpu'); curCols=-1; sceneKey=''; if(slides[cur]) applyScene(slides[cur],true);
+}
+resize();
+go(idxFromHash(),true);
+(async()=>{
+  const force=/[?&]cpu\b/.test(location.search);
+  try{
+    if(force) throw new Error('forced');
+    cfg=cfgFor(slides[cur]);
+    engine.sim=await initGPU(); engine.kind='gpu'; window.__engine={kind:'gpu'};
+    setStamp('gpu');
+  }catch(err){ engine.sim=null; fallback(err.message||String(err)); return requestAnimationFrame(loop); }
+  sceneKey=''; applyScene(slides[cur],true);
+  requestAnimationFrame(loop);
+})();
+window.__deck={go,count:slides.length,engine,get cfg(){return cfg},get view(){return view}};
+})();
+</script>
+
+</body>
+</html>
